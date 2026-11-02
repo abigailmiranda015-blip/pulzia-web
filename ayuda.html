@@ -10,7 +10,7 @@
 <body>
 <header class="top"><div class="wrap">
  <a class="logo" href="./"><i></i>Pulzia</a>
- <nav><a href="ayuda.html">Ayuda</a><a href="privacidad.html">Privacidad</a><a href="terminos.html">Términos</a></nav>
+ <nav><a href="ayuda.html">Ayuda</a><a href="privacidad.html">Privacidad</a><a href="terminos.html">Términos</a><span class="lang"><b>ES</b><a href="en/help.html">EN</a><a href="pt/ajuda.html">PT</a></span></nav>
 </div></header>
 
 <main class="wrap">
@@ -54,5 +54,6 @@
  <div>© 2026 Pulzia · <a href="mailto:soporte@pulzia.app">soporte@pulzia.app</a></div>
  <div><a href="ayuda.html">Ayuda</a><a href="privacidad.html">Privacidad</a><a href="terminos.html">Términos</a></div>
 </div></footer>
+<script>document.querySelectorAll('.lang a,.lang b').forEach(a=>a.addEventListener('click',()=>{try{localStorage.setItem('pz_lang',a.textContent.toLowerCase())}catch(e){}}))</script>
 </body>
 </html>
