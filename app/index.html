@@ -389,7 +389,11 @@ const apiCall = async (path, init = {}) => {
 async function refreshCrm() {
   try {
     const { crms } = await apiCall("/crm");
-    const on = crms.find((c) => c.connected);
+    // El almacenamiento de Cloudflare puede tardar hasta un minuto en mostrar una conexión recién hecha:
+    // si se acaba de conectar en este navegador, se confía en eso.
+    let just = null;
+    try { just = JSON.parse(localStorage.getItem("pulzia_crm_just") || "null"); } catch {}
+    const on = crms.find((c) => c.connected) || (just && Date.now() - just.at < 5 * 60e3 ? crms.find((c) => c.id === just.id) : null);
     crmName = on ? on.name : "ninguno";
     window.__crm = crmName;
     $("crmBtn").textContent = on ? "✓ " + on.name + " conectado (tocar para desconectar)" : "Conectar mi CRM (monday)";
@@ -400,17 +404,29 @@ $("crmBtn").addEventListener("click", async () => {
   const m = $("mCrm"); say(m, "");
   const b = $("crmBtn");
   try {
-    if (b.dataset.on) { await apiCall("/crm/" + b.dataset.on, { method: "DELETE" }); return refreshCrm(); }
+    if (b.dataset.on) {
+      try { localStorage.removeItem("pulzia_crm_just"); } catch {}
+      await apiCall("/crm/" + b.dataset.on, { method: "DELETE" });
+      b.textContent = "Conectar mi CRM (monday)"; b.dataset.on = ""; window.__crm = "ninguno";
+      return say(m, "Se desconectó tu CRM.", true);
+    }
     const { url } = await apiCall("/crm/monday/connect", { method: "POST" });
     location.href = url;
   } catch { say(m, "No se pudo conectar. Prueba de nuevo en un momento."); }
 });
+let crmDone = false;
 async function finishCrm() {
+  if (crmDone) return;
+  crmDone = true;
   const q = new URLSearchParams(location.search);
   const code = q.get("code"), state = q.get("state");
   if (!code || !state) return;
   history.replaceState(null, "", location.pathname + "#home");
-  try { await apiCall("/crm/monday/callback", { method: "POST", body: JSON.stringify({ code, state }) }); say($("mCrm"), "¡Listo! Tu monday quedó conectado.", true); }
+  try {
+    await apiCall("/crm/monday/callback", { method: "POST", body: JSON.stringify({ code, state }) });
+    try { localStorage.setItem("pulzia_crm_just", JSON.stringify({ id: "monday", at: Date.now() })); } catch {}
+    say($("mCrm"), "¡Listo! Tu monday quedó conectado.", true);
+  }
   catch (e) { say($("mCrm"), "No se pudo terminar la conexión: " + e.message); }
 }
 $("logout").addEventListener("click", () => signOut(auth));
