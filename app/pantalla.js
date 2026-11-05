@@ -2,61 +2,64 @@
 // Lee del CRM conectado (hoy monday) lo que está pendiente o hay que revisar, agrupado por etapa.
 // Solo lectura: no cambia nada en el CRM.
 
-const DONE = /(listo|hecho|done|terminad|cerrad|ganad|perdid|entregad|complet|descartad|desiert|rechaz|archiv|pagad|finaliz|no aplica|deciert)/i;
-const STAGE = /(etapa|estado|stage|status|fase)/i;
+const DONE = /(listo|hecho|done|terminad|cerrad|ganad|perdid|entregad|complet|descartad|desiert|deciert|rechaz|archiv|pagad|finaliz|no aplica|acept|compr[oó] con|enviado a |derivad|lista negra)/i;
+const SKIP_BOARD = /(cat[aá]logo|art[ií]culo|producto|inventario|ficha|proveedor|plantilla|template|prueba|demo|subelementos|subitems)/i;
+const DUE = /(pr[oó]xim|venc|v[aá]lid|l[ií]mite|plazo|llamad|saldo|seguimiento|recordar)/i;
 const today = () => new Date().toISOString().slice(0, 10);
 const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
 const norm = (s) => String(s || "").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/\s+/g, " ").trim();
+const nice = (s) => (s === s.toUpperCase() ? s.charAt(0) + s.slice(1).toLowerCase() : s);
 
+// Cada tablero de ventas es una etapa (p. ej. Adjudicados → Para cotizar → Seguimiento).
+// Pendiente = lo que no está terminado según su estado. Vencido = una fecha de próximo paso ya pasó.
 export async function cargarPendientes(apiCall) {
-  const query = `query { boards(limit: 10, order_by: used_at, state: active) {
-    id name type items_count
-    columns { id title type }
-    groups { id title }
-    items_page(limit: 100) { items { id name updated_at group { id title } column_values { id type text } } }
-  } }`;
-  const r = await apiCall("/crm/monday/api", { method: "POST", body: JSON.stringify({ query }) });
-  if (r.errors?.length && !r.data) throw new Error(r.errors[0].message || "error del CRM");
-  const boards = (r.data?.boards || []).filter((b) => (b.type || "board") === "board" && b.items_count > 0 && !/^(subelementos|subitems)/i.test(b.name));
-  const hoy = today();
-  const etapas = [];
-  for (const b of boards) {
-    const cols = Object.fromEntries((b.columns || []).map((c) => [c.id, c]));
-    const statusCols = (b.columns || []).filter((c) => c.type === "status");
-    const stageCol = statusCols.find((c) => STAGE.test(c.title)) || statusCols[0];
-    const byGroups = (b.groups || []).length > 1;
-    const porEtapa = new Map();
-    for (const it of b.items_page?.items || []) {
-      const val = (id) => (it.column_values || []).find((v) => v.id === id)?.text || "";
-      const etapa = byGroups ? it.group?.title || "Sin etapa" : (stageCol && val(stageCol.id)) || it.group?.title || "Sin etapa";
-      const estado = stageCol ? val(stageCol.id) : "";
-      if (DONE.test(etapa) || DONE.test(estado)) continue;
-      const fechas = (it.column_values || []).filter((v) => v.type === "date" && v.text).map((v) => v.text.slice(0, 10));
-      const vencido = fechas.some((f) => f < hoy);
+  const q = (query) => apiCall("/crm/monday/api", { method: "POST", body: JSON.stringify({ query }) }).then((r) => {
+    if (r.errors?.length && !r.data) throw new Error(r.errors[0].message || "error del CRM");
+    return r.data;
+  });
+  const lista = await q(`query { boards(limit: 40, order_by: used_at, state: active) { id name type items_count columns { id title type } } }`);
+  const cand = (lista?.boards || [])
+    .filter((b) => b.type === "board" && b.items_count > 0 && b.items_count <= 800 && !SKIP_BOARD.test(b.name) && (b.columns || []).some((c) => c.type === "status"))
+    .slice(0, 6);
+  if (!cand.length) return resumen([]);
+  const det = await q(`query { boards(ids: [${cand.map((b) => b.id).join(",")}]) { id items_page(limit: 100) { items { id name updated_at group { title } column_values { id type text } } } } }`);
+  const hoy = today(), etapas = [];
+  for (const b of cand) {
+    const items = (det?.boards || []).find((x) => String(x.id) === String(b.id))?.items_page?.items || [];
+    const cols = Object.fromEntries(b.columns.map((c) => [c.id, c]));
+    const st = b.columns.filter((c) => c.type === "status");
+    const main = st.find((c) => /etapa/i.test(c.title)) || st.find((c) => /^estado$/i.test(c.title.trim())) || st.find((c) => /estado|status/i.test(c.title)) || st[0];
+    const estados = st.filter((c) => c === main || /^estado/i.test(c.title.trim()));
+    const pend = [];
+    for (const it of items) {
+      const cv = Object.fromEntries((it.column_values || []).map((v) => [v.id, v]));
+      if (DONE.test(it.group?.title || "") || estados.some((c) => DONE.test(cv[c.id]?.text || ""))) continue;
+      const vencido = b.columns.some((c) => c.type === "date" && DUE.test(c.title) && (cv[c.id]?.text || "9999").slice(0, 10) < hoy);
       const campos = (it.column_values || [])
-        .filter((v) => v.text && v.type !== "subtasks" && v.type !== "board_relation" && v.text.length < 160)
+        .filter((v) => v.text && !["subtasks", "board_relation", "mirror", "file", "doc", "button", "link"].includes(v.type) && v.text.length < 160)
         .map((v) => [cols[v.id]?.title || v.id, v.text]);
-      if (!porEtapa.has(etapa)) porEtapa.set(etapa, []);
-      porEtapa.get(etapa).push({ id: it.id, name: it.name, etapa, tablero: b.name, vencido, updated: it.updated_at, campos });
+      pend.push({ id: it.id, name: it.name, etapa: nice(b.name), tablero: nice(b.name), estado: (main && cv[main.id]?.text) || "", vencido, updated: it.updated_at, campos });
     }
-    for (const [nombre, items] of porEtapa) {
-      items.sort((a, z) => (z.vencido - a.vencido) || String(a.updated).localeCompare(String(z.updated)));
-      etapas.push({ nombre, tablero: b.name, items });
-    }
+    if (!pend.length) continue;
+    pend.sort((a, z) => (z.vencido - a.vencido) || String(a.updated).localeCompare(String(z.updated)));
+    etapas.push({ nombre: nice(b.name), tablero: nice(b.name), items: pend });
   }
-  // Primero las etapas con más pendientes; como máximo 6 en la tele.
-  etapas.sort((a, z) => z.items.length - a.items.length);
+  return resumen(etapas);
+}
+
+function resumen(etapas) {
   const total = etapas.reduce((n, e) => n + e.items.length, 0);
-  const todos = etapas.flatMap((e) => e.items);
-  const varios = new Set(etapas.map((e) => e.tablero)).size > 1;
   const texto = total
     ? `Hay ${total} pendientes en total.\n` +
-      etapas.slice(0, 8).map((e) => {
+      etapas.map((e) => {
         const v = e.items.filter((i) => i.vencido).length;
-        return `- ${e.nombre}${varios ? " (" + e.tablero + ")" : ""}: ${e.items.length}${v ? `, ${v} con fecha vencida` : ""}. Por ejemplo: ${e.items.slice(0, 4).map((i) => i.name + (i.vencido ? " (vencido)" : "")).join("; ")}.`;
+        const por = {};
+        e.items.forEach((i) => i.estado && (por[i.estado] = (por[i.estado] || 0) + 1));
+        const est = Object.entries(por).sort((a, z) => z[1] - a[1]).slice(0, 4).map(([k, n]) => `${n} en "${k}"`).join(", ");
+        return `- Etapa ${e.nombre}: ${e.items.length}${est ? " (" + est + ")" : ""}${v ? `, ${v} con fecha vencida` : ""}. Por ejemplo: ${e.items.slice(0, 4).map((i) => i.name + (i.vencido ? " (vencido)" : "")).join("; ")}.`;
       }).join("\n")
     : "No hay pendientes en el CRM ahora.";
-  return { total, etapas, todos, varios, texto };
+  return { total, etapas, todos: etapas.flatMap((e) => e.items), texto };
 }
 
 export function buscar(datos, nombre) {
@@ -102,11 +105,11 @@ export function pintarFicha(el, it) {
   const campos = it.campos.filter(([k]) => norm(k) !== "name").slice(0, 10);
   el.innerHTML = `
     <button class="fx" type="button" aria-label="Cerrar ficha">×</button>
-    <div class="fk">${esc(it.tablero)} · ${esc(it.etapa)}${it.vencido ? ' · <span class="late">fecha vencida</span>' : ""}</div>
+    <div class="fk">${esc(it.etapa)}${it.estado ? " · " + esc(it.estado) : ""}${it.vencido ? ' · <span class="late">fecha vencida</span>' : ""}</div>
     <h3>${esc(it.name)}</h3>
     <dl>${campos.map(([k, v]) => `<div><dt>${esc(k)}</dt><dd>${esc(v)}</dd></div>`).join("") || "<div><dd>Sin más datos.</dd></div>"}</dl>`;
 }
 
 export function textoFicha(it) {
-  return `${it.name} — tablero ${it.tablero}, etapa ${it.etapa}${it.vencido ? ", tiene una fecha vencida" : ""}.\n` + it.campos.slice(0, 14).map(([k, v]) => `${k}: ${v}`).join("\n");
+  return `${it.name} — etapa ${it.etapa}${it.estado ? ", estado " + it.estado : ""}${it.vencido ? ", tiene una fecha vencida" : ""}.\n` + it.campos.slice(0, 14).map(([k, v]) => `${k}: ${v}`).join("\n");
 }
