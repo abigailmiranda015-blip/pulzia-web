@@ -328,6 +328,25 @@ $("callBtn").addEventListener("click", async () => {
   vE.currentTime = 0; vH.currentTime = 0;
   vE.play().catch(() => {}); vH.play().catch(() => {});
   vE.classList.add("on"); vH.classList.remove("on");
+  // Motor de la llamada: la voz propia de Pulzia si ya está conectada (y le quedan minutos); si no, ElevenLabs.
+  const motor = new URLSearchParams(location.search).get("motor");
+  const own = motor === "eleven" ? null : await import("./voz-propia.js").catch(() => null);
+  const st = own ? await own.voiceStatus(() => user.getIdToken()) : null;
+  if (own && st?.ready && st.left > 0) {
+    conv = own.startOwnVoiceCall({
+      getToken: () => user.getIdToken(),
+      crm: "ninguno",
+      onMode: (mode) => {
+        if (mode === "connected") { t0 = Date.now(); tick = setInterval(() => { const s = Math.floor((Date.now() - t0) / 1000); $("cTime").textContent = Math.floor(s / 60) + ":" + String(s % 60).padStart(2, "0"); }, 1000); }
+        if (mode === "thinking") { $("cState").textContent = "Pensando…"; return; }
+        showTalk(mode === "speaking");
+      },
+      onSubtitle: (t) => ($("cSub").textContent = t),
+      onError: (t) => ($("cSub").textContent = t),
+      onEnd: () => { if (conv) endCall(); },
+    });
+    return;
+  }
   try {
     const { Conversation } = await import("https://cdn.jsdelivr.net/npm/@elevenlabs/client@1.30.0/+esm");
     conv = await Conversation.startSession({
