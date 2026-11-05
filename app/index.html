@@ -1,0 +1,258 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0f4f47">
+<title>Pulzia AI</title>
+<link rel="apple-touch-icon" href="icon.jpg">
+<style>
+/* Pulzia fuera de monday: bienvenida, crear cuenta e iniciar sesión. Mismo verde y la misma asistente que en la app de monday. */
+:root { --brand: #0f4f47; --brand2: #156d61; --glow: #4fd1b8; --bg: #f6f8f7; --card: #ffffff; --ink: #1f2430; --muted: #5f6675; --line: #dfe5e3; --accent: #0f7d6e; --google: #ffffff;
+  font-family: Figtree, "Segoe UI", Roboto, system-ui, -apple-system, sans-serif; }
+@media (prefers-color-scheme: dark) { :root { --bg: #141a19; --card: #1d2524; --ink: #e9efed; --muted: #a2adaa; --line: #2e3a38; --accent: #3fbfa9; --google: #f3f5f4; color-scheme: dark; } }
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+html, body { margin: 0; min-height: 100%; background: var(--bg); color: var(--ink); }
+button, input { font: inherit; }
+.screen { min-height: 100dvh; display: flex; flex-direction: column; }
+.top { background: linear-gradient(160deg, var(--brand), var(--brand2)); color: #fff; padding: max(28px, env(safe-area-inset-top)) max(20px, env(safe-area-inset-right)) 34px max(20px, env(safe-area-inset-left)); display: grid; place-items: center; gap: 14px; text-align: center; border-radius: 0 0 28px 28px; }
+.desk { width: min(100%, 420px); aspect-ratio: 16 / 9; border-radius: 18px; overflow: hidden; background: #2a2420 url(office/poster.jpg) center / cover; box-shadow: 0 12px 30px rgba(0,0,0,.28); border: 3px solid rgba(255,255,255,.25); }
+.desk { position: relative; }
+.desk video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; display: block; transition: opacity .55s linear; }
+.desk video.r { opacity: 0; }
+.desk video.r.on { opacity: 1; }
+.desk.small { width: min(100%, 260px); border-radius: 14px; }
+.ring { width: clamp(132px, 34vw, 190px); aspect-ratio: 1; border-radius: 50%; padding: 5px; background: conic-gradient(from 200deg, var(--glow), #ffffff55, var(--glow)); box-shadow: 0 12px 30px rgba(0,0,0,.25); }
+.ring img { width: 100%; height: 100%; border-radius: 50%; object-fit: cover; display: block; border: 3px solid rgba(255,255,255,.4); }
+.brand { font-size: 30px; font-weight: 800; letter-spacing: -.01em; margin: 0; }
+.brand span { color: var(--glow); }
+.tag { margin: 0; font-size: 16px; opacity: .92; max-width: 30ch; line-height: 1.4; text-wrap: balance; }
+.body { flex: 1; width: 100%; max-width: 440px; margin: 0 auto; padding: 24px max(20px, env(safe-area-inset-right)) max(24px, env(safe-area-inset-bottom)) max(20px, env(safe-area-inset-left)); display: flex; flex-direction: column; gap: 14px; }
+.points { list-style: none; margin: 0 0 6px; padding: 0; display: flex; flex-direction: column; gap: 10px; }
+.points li { display: flex; gap: 12px; align-items: flex-start; background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 12px 14px; font-size: 15px; line-height: 1.4; }
+.points b { display: block; }
+.points .ic { flex: 0 0 34px; height: 34px; border-radius: 10px; display: grid; place-items: center; background: #e3f3ef; color: var(--brand); font-size: 18px; }
+.btn { height: 52px; border-radius: 14px; border: 0; font-weight: 700; font-size: 16px; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 10px; width: 100%; }
+.btn.primary { background: var(--accent); color: #fff; }
+.btn.ghost { background: transparent; color: var(--ink); border: 2px solid var(--line); }
+.btn.google { background: var(--google); color: #1f2430; border: 1px solid #d6dbd9; }
+.btn:focus-visible, input:focus-visible, a:focus-visible { outline: 3px solid var(--glow); outline-offset: 2px; }
+.or { display: flex; align-items: center; gap: 10px; color: var(--muted); font-size: 14px; }
+.or::before, .or::after { content: ""; flex: 1; height: 1px; background: var(--line); }
+label { display: flex; flex-direction: column; gap: 6px; font-size: 14px; font-weight: 600; }
+input { height: 50px; border-radius: 12px; border: 2px solid var(--line); background: var(--card); color: var(--ink); padding: 0 14px; font-size: 16px; }
+.muted { color: var(--muted); font-size: 14px; line-height: 1.45; margin: 0; text-align: center; }
+.muted a, .link { color: var(--accent); font-weight: 700; background: none; border: 0; padding: 0; cursor: pointer; font-size: inherit; }
+.msg { margin: 0; padding: 10px 12px; border-radius: 12px; font-size: 14px; background: #fde4e1; color: #b42318; }
+.msg.ok { background: #e1f3e8; color: #1e7f4e; }
+.free { text-align: center; font-size: 14px; font-weight: 700; color: var(--accent); margin: 0; }
+h2 { margin: 0; font-size: 22px; }
+.back { align-self: flex-start; background: none; border: 0; color: #fff; font-weight: 700; font-size: 15px; cursor: pointer; padding: 4px 0; }
+.top.small { padding-bottom: 24px; gap: 10px; }
+.top.small .ring { width: 92px; }
+</style>
+</head>
+<body>
+
+<!-- 1. Bienvenida -->
+<section class="screen" id="welcome">
+  <header class="top">
+    <div class="desk"><video src="office/trabaja-pp.mp4" poster="office/poster.jpg" autoplay muted loop playsinline aria-label="La asistente de Pulzia trabajando en su escritorio"></video></div>
+    <h1 class="brand">Pulzia <span>AI</span></h1>
+    <p class="tag">Tu asistente que te ayuda a ti y a tu equipo a trabajar en monday</p>
+  </header>
+  <div class="body">
+    <ul class="points">
+      <li><span class="ic" aria-hidden="true">💬</span><span><b>Pregúntale cómo vamos</b>Te cuenta lo importante de cada etapa y te lo muestra en pantalla.</span></li>
+      <li><span class="ic" aria-hidden="true">🎙️</span><span><b>Háblale como a una compañera</b>Le hablas o le escribes, y te responde con voz.</span></li>
+      <li><span class="ic" aria-hidden="true">✅</span><span><b>Tú apruebas cada cambio</b>Antes de tocar tu monday, te pide permiso. Nunca borra nada.</span></li>
+    </ul>
+    <button class="btn primary" type="button" data-go="signup">Crear cuenta gratis</button>
+    <button class="btn ghost" type="button" data-go="login">Ya tengo cuenta</button>
+    <p class="free">15 días gratis · sin tarjeta</p>
+  </div>
+</section>
+
+<!-- 2. Crear cuenta -->
+<section class="screen" id="signup" hidden>
+  <header class="top small">
+    <button class="back" type="button" data-go="welcome">← Volver</button>
+    <div class="desk small"><video src="office/trabaja-pp.mp4" poster="office/poster.jpg" autoplay muted loop playsinline aria-hidden="true"></video></div>
+    <h2>Crea tu cuenta</h2>
+  </header>
+  <form class="body" id="fSignup" novalidate>
+    <button class="btn google" type="button" data-google>
+      <svg width="20" height="20" viewBox="0 0 48 48" aria-hidden="true"><path fill="#FFC107" d="M43.6 20.5H42V20H24v8h11.3C33.7 32.7 29.2 36 24 36c-6.6 0-12-5.4-12-12s5.4-12 12-12c3 0 5.8 1.1 7.9 3l5.7-5.7C34 6.1 29.3 4 24 4 12.9 4 4 12.9 4 24s8.9 20 20 20 20-8.9 20-20c0-1.2-.1-2.3-.4-3.5z"/><path fill="#FF3D00" d="m6.3 14.7 6.6 4.8C14.7 15.1 19 12 24 12c3 0 5.8 1.1 7.9 3l5.7-5.7C34 6.1 29.3 4 24 4 16.3 4 9.7 8.3 6.3 14.7z"/><path fill="#4CAF50" d="M24 44c5.2 0 9.9-2 13.4-5.2l-6.2-5.2C29.2 35.1 26.7 36 24 36c-5.2 0-9.6-3.3-11.3-8l-6.5 5C9.5 39.6 16.2 44 24 44z"/><path fill="#1976D2" d="M43.6 20.5H42V20H24v8h11.3c-.8 2.2-2.2 4.2-4.1 5.6l6.2 5.2C37 39.2 44 34 44 24c0-1.2-.1-2.3-.4-3.5z"/></svg>
+      Continuar con Google
+    </button>
+    <div class="or">o con tu correo</div>
+    <label>Tu nombre<input name="name" autocomplete="name" required placeholder="Ej.: Abi"></label>
+    <label>Nombre de tu empresa<input name="company" autocomplete="organization" placeholder="Ej.: Urban Plaza SpA"></label>
+    <label>Correo<input name="email" type="email" autocomplete="email" required placeholder="tu@empresa.cl"></label>
+    <label>Contraseña<input name="password" type="password" autocomplete="new-password" required minlength="8" placeholder="Mínimo 8 caracteres"></label>
+    <p class="msg" id="mSignup" role="alert" hidden></p>
+    <button class="btn primary" type="submit">Crear cuenta</button>
+    <p class="muted">Al crear tu cuenta aceptas los <a href="/terminos.html" target="_blank" rel="noopener">Términos</a> y la <a href="/privacidad.html" target="_blank" rel="noopener">Privacidad</a>.</p>
+    <p class="muted">¿Ya tienes cuenta? <button class="link" type="button" data-go="login">Inicia sesión</button></p>
+  </form>
+</section>
+
+<!-- 3. Iniciar sesión -->
+<section class="screen" id="login" hidden>
+  <header class="top small">
+    <button class="back" type="button" data-go="welcome">← Volver</button>
+    <div class="desk small"><video src="office/trabaja-pp.mp4" poster="office/poster.jpg" autoplay muted loop playsinline aria-hidden="true"></video></div>
+    <h2>Hola de nuevo</h2>
+  </header>
+  <form class="body" id="fLogin" novalidate>
+    <button class="btn google" type="button" data-google>
+      <svg width="20" height="20" viewBox="0 0 48 48" aria-hidden="true"><path fill="#FFC107" d="M43.6 20.5H42V20H24v8h11.3C33.7 32.7 29.2 36 24 36c-6.6 0-12-5.4-12-12s5.4-12 12-12c3 0 5.8 1.1 7.9 3l5.7-5.7C34 6.1 29.3 4 24 4 12.9 4 4 12.9 4 24s8.9 20 20 20 20-8.9 20-20c0-1.2-.1-2.3-.4-3.5z"/><path fill="#FF3D00" d="m6.3 14.7 6.6 4.8C14.7 15.1 19 12 24 12c3 0 5.8 1.1 7.9 3l5.7-5.7C34 6.1 29.3 4 24 4 16.3 4 9.7 8.3 6.3 14.7z"/><path fill="#4CAF50" d="M24 44c5.2 0 9.9-2 13.4-5.2l-6.2-5.2C29.2 35.1 26.7 36 24 36c-5.2 0-9.6-3.3-11.3-8l-6.5 5C9.5 39.6 16.2 44 24 44z"/><path fill="#1976D2" d="M43.6 20.5H42V20H24v8h11.3c-.8 2.2-2.2 4.2-4.1 5.6l6.2 5.2C37 39.2 44 34 44 24c0-1.2-.1-2.3-.4-3.5z"/></svg>
+      Continuar con Google
+    </button>
+    <div class="or">o con tu correo</div>
+    <label>Correo<input name="email" type="email" autocomplete="email" required placeholder="tu@empresa.cl"></label>
+    <label>Contraseña<input name="password" type="password" autocomplete="current-password" required placeholder="Tu contraseña"></label>
+    <p class="msg" id="mLogin" role="alert" hidden></p>
+    <button class="btn primary" type="submit">Entrar</button>
+    <p class="muted"><button class="link" type="button" id="forgot">¿Olvidaste tu contraseña?</button></p>
+    <p class="muted">¿No tienes cuenta? <button class="link" type="button" data-go="signup">Créala gratis</button></p>
+  </form>
+</section>
+
+
+<!-- 4. Ya dentro: siguiente paso, conectar monday -->
+<section class="screen" id="home" hidden>
+  <header class="top small">
+    <div class="desk small"><video src="office/trabaja-pp.mp4" poster="office/poster.jpg" autoplay muted loop playsinline aria-hidden="true"></video></div>
+    <h2 id="hello">¡Bienvenida!</h2>
+  </header>
+  <div class="body">
+    <p class="muted" style="text-align:left">Tu cuenta ya está creada. El siguiente paso es conectar tu monday para que tu asistente pueda leer tus tableros.</p>
+    <button class="btn primary" type="button" disabled>Conectar con monday (próximo paso)</button>
+    <button class="btn ghost" type="button" id="logout">Cerrar sesión</button>
+  </div>
+</section>
+
+<script>
+// Navegación entre pantallas. El inicio de sesión real (correo y Google) se conecta en el siguiente paso.
+const go = (window.__go = (id) => {
+  document.querySelectorAll(".screen").forEach((s) => (s.hidden = s.id !== id));
+  window.scrollTo(0, 0);
+  if (location.hash.slice(1) !== id) history.replaceState(null, "", "#" + id);
+});
+document.querySelectorAll("[data-go]").forEach((b) => b.addEventListener("click", () => go(b.dataset.go)));
+const start = location.hash.slice(1);
+if (["welcome", "signup", "login"].includes(start)) go(start);
+
+// Reacciones: cuando la persona termina de escribir un dato, o al crear la cuenta, Camila la mira, sonríe y asiente.
+// El video de reacción parte y termina en la misma pose que el de trabajo, y se cambia solo en esa pose (sin saltos).
+document.querySelectorAll(".desk").forEach((desk) => {
+  const work = desk.querySelector("video");
+  const re = document.createElement("video");
+  Object.assign(re, { src: work.src.replace("trabaja-pp.mp4", "reacciona.mp4"), muted: true, playsInline: true, preload: "auto" });
+  re.className = "r";
+  re.setAttribute("playsinline", "");
+  re.setAttribute("aria-hidden", "true");
+  desk.append(re);
+  desk._react = () => {
+    if (desk._busy) return;
+    desk._busy = true;
+    work.playbackRate = 1.8; // llega rápido a la pose de inicio
+    const wait = () => {
+      const d = work.duration || 7.3;
+      if (work.currentTime >= d - 0.6 || work.currentTime < 0.05) {
+        re.currentTime = 0;
+        re.play().catch(() => {});
+        re.classList.add("on");
+        work.playbackRate = 1;
+        const back = () => {
+          if ((re.duration || 8) - re.currentTime > 0.6 && !re.ended) return requestAnimationFrame(back);
+          work.currentTime = 0;
+          work.play().catch(() => {});
+          re.classList.remove("on");
+          setTimeout(() => { re.pause(); desk._busy = false; }, 700);
+        };
+        return requestAnimationFrame(back);
+      }
+      requestAnimationFrame(wait);
+    };
+    requestAnimationFrame(wait);
+  };
+});
+const reactNow = () => document.querySelectorAll(".screen:not([hidden]) .desk").forEach((d) => d._react?.());
+let lastReact = 0;
+document.querySelectorAll("input").forEach((inp) =>
+  inp.addEventListener("change", () => {
+    if (inp.value.trim().length >= 2 && Date.now() - lastReact > 9000) { lastReact = Date.now(); reactNow(); }
+  }),
+);
+
+</script>
+<script type="module">
+// Cuentas con Firebase (correo y contraseña, o Google). Las contraseñas las guarda Google cifradas; la app nunca las ve.
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, GoogleAuthProvider, signInWithPopup, sendPasswordResetEmail, updateProfile, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+import { firebaseConfig } from "./firebase-config.js";
+const auth = getAuth(initializeApp(firebaseConfig));
+auth.languageCode = "es";
+const $ = (id) => document.getElementById(id);
+const say = (el, text, ok = false) => { el.textContent = text; el.classList.toggle("ok", ok); el.hidden = !text; };
+const ERR = {
+  "auth/email-already-in-use": "Ese correo ya tiene una cuenta. Toca «Inicia sesión».",
+  "auth/invalid-email": "Revisa el correo, parece que tiene un error.",
+  "auth/weak-password": "La contraseña debe tener al menos 8 caracteres.",
+  "auth/invalid-credential": "El correo o la contraseña no coinciden.",
+  "auth/wrong-password": "El correo o la contraseña no coinciden.",
+  "auth/user-not-found": "No hay una cuenta con ese correo. Puedes crearla gratis.",
+  "auth/too-many-requests": "Demasiados intentos. Espera un momento y prueba de nuevo.",
+  "auth/popup-closed-by-user": "Cerraste la ventana de Google antes de terminar.",
+  "auth/unauthorized-domain": "Esta dirección todavía no está autorizada en Firebase.",
+  "auth/network-request-failed": "No hay conexión. Revisa tu internet.",
+};
+const msg = (e) => ERR[e?.code] || "No se pudo completar. Prueba de nuevo.";
+const busy = (form, on) => form.querySelectorAll("button").forEach((b) => (b.disabled = on));
+const react = () => document.querySelectorAll(".screen:not([hidden]) .desk").forEach((d) => d._react?.());
+
+$("fSignup").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const f = e.target, m = $("mSignup");
+  const name = f.elements.name.value.trim(), email = f.elements.email.value.trim(), pass = f.elements.password.value;
+  if (!name || !email || pass.length < 8) return say(m, !name ? "Escribe tu nombre." : !email ? "Escribe tu correo." : "La contraseña debe tener al menos 8 caracteres.");
+  busy(f, true); say(m, "");
+  try {
+    const cred = await createUserWithEmailAndPassword(auth, email, pass);
+    await updateProfile(cred.user, { displayName: name });
+    try { localStorage.setItem("pulzia_company", f.elements.company.value.trim()); } catch {}
+    react();
+  } catch (err) { say(m, msg(err)); }
+  busy(f, false);
+});
+$("fLogin").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const f = e.target, m = $("mLogin");
+  busy(f, true); say(m, "");
+  try { await signInWithEmailAndPassword(auth, f.elements.email.value.trim(), f.elements.password.value); react(); }
+  catch (err) { say(m, msg(err)); }
+  busy(f, false);
+});
+document.querySelectorAll("[data-google]").forEach((b) => b.addEventListener("click", async () => {
+  const m = b.closest("form").querySelector(".msg");
+  try { await signInWithPopup(auth, new GoogleAuthProvider()); } catch (err) { say(m, msg(err)); }
+}));
+$("forgot").addEventListener("click", async () => {
+  const m = $("mLogin"), email = $("fLogin").elements.email.value.trim();
+  if (!email) return say(m, "Escribe tu correo arriba y vuelve a tocar «¿Olvidaste tu contraseña?».");
+  try { await sendPasswordResetEmail(auth, email); say(m, "Te mandamos un correo para crear una contraseña nueva.", true); }
+  catch (err) { say(m, msg(err)); }
+});
+$("logout").addEventListener("click", () => signOut(auth));
+onAuthStateChanged(auth, (user) => {
+  if (user) {
+    $("hello").textContent = "¡Hola, " + ((user.displayName || "").split(" ")[0] || "bienvenida") + "!";
+    window.__go?.("home");
+  } else if (!document.getElementById("home").hidden) window.__go?.("welcome");
+});
+</script>
+</body>
+</html>
