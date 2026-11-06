@@ -65,6 +65,13 @@ input { height: 50px; border-radius: 12px; border: 2px solid var(--line); backgr
 .chat-in .btn { width: auto; padding: 0 16px; margin: 0; }
 .pasos { display: grid; gap: 8px; padding: 14px; border: 1px solid var(--line); border-radius: 16px; background: var(--card); text-align: left; }
 .pasos[hidden] { display: none; }
+.con3 { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.con { display: grid; justify-items: center; gap: 4px; padding: 12px 6px; border-radius: 12px; border: 1px solid var(--line); background: var(--bg); color: var(--ink); font: inherit; cursor: pointer; text-align: center; min-width: 0; }
+.con .ci { font-size: 22px; line-height: 1; }
+.con .cn { font-weight: 600; font-size: 14px; }
+.con .cs { font-size: 12px; color: var(--accent); overflow-wrap: anywhere; }
+.con.ok { border-color: #1e7f4e; }
+.con.ok .cs { color: #1e7f4e; }
 .paso { display: flex; gap: 10px; align-items: center; padding: 12px; border-radius: 12px; border: 1px solid var(--line); background: var(--bg); color: var(--ink); font: inherit; font-weight: 600; text-align: left; cursor: pointer; }
 .paso .pc { flex: none; width: 26px; height: 26px; border-radius: 50%; display: grid; place-items: center; background: var(--accent); color: #fff; font-size: 14px; }
 .paso.ok { color: var(--muted); font-weight: 400; text-decoration: line-through; }
@@ -224,12 +231,13 @@ h2 { margin: 0; font-size: 22px; }
     <h2 id="hello">¡Bienvenida!</h2>
   </header>
   <div class="body">
-    <div class="pasos" id="pasos" hidden>
-      <b>Primeros pasos</b>
-      <p class="muted" style="margin:0;text-align:left">Dale a tu asistente lo que necesita para ayudarte:</p>
-      <button type="button" class="paso" id="pFuente"><span class="pc">1</span><span>Conecta tu CRM o sube tus documentos</span></button>
-      <button type="button" class="paso" id="pWa"><span class="pc">2</span><span>Vincula tu WhatsApp</span></button>
-      <button type="button" class="paso" id="pNombre"><span class="pc">3</span><span>Ponle nombre a tu asistente y elige tus botones</span></button>
+    <div class="pasos" id="pasos">
+      <b id="pTit">Conecta a tu asistente</b>
+      <div class="con3">
+        <button type="button" class="con" id="pWa"><span class="ci">💬</span><span class="cn">WhatsApp</span><span class="cs">Vincular</span></button>
+        <button type="button" class="con" id="pCrm"><span class="ci">📊</span><span class="cn">Tu CRM</span><span class="cs">Conectar</span></button>
+        <button type="button" class="con" id="pDocs"><span class="ci">📁</span><span class="cn">Documentos</span><span class="cs">Excel, PDF, Drive…</span></button>
+      </div>
     </div>
     <div class="atajos" id="atajos" aria-label="Accesos rápidos" hidden></div>
     <button class="btn ghost" type="button" id="chatBtn">Escribirle a tu asistente</button>
@@ -641,15 +649,16 @@ $("crmBtn").addEventListener("click", async () => {
 let tieneDocs = false;
 async function pintarPasos() {
   try { tieneDocs = (await apiCall("/docs")).docs.length > 0; } catch {}
-  const fuente = !!$("crmBtn").dataset.on || tieneDocs, wa = !!$("waBtn").dataset.on, nombre = !!perfilApp.asistente;
-  [["pFuente", fuente, "1"], ["pWa", wa, "2"], ["pNombre", nombre, "3"]].forEach(([id, ok, n]) => { $(id).classList.toggle("ok", ok); $(id).querySelector(".pc").textContent = ok ? "✓" : n; });
-  const listo = fuente && wa && nombre;
-  $("pasos").hidden = listo;
+  const crm = !!$("crmBtn").dataset.on, wa = !!$("waBtn").dataset.on, fuente = crm || tieneDocs;
+  [["pWa", wa, "Vincular", "✓ Vinculado"], ["pCrm", crm, "Conectar", "✓ Conectado"], ["pDocs", tieneDocs, "Excel, PDF, Drive…", "✓ Subidos"]].forEach(([id, ok, no, si]) => {
+    $(id).classList.toggle("ok", ok); $(id).querySelector(".cs").textContent = ok ? si : no;
+  });
+  $("pTit").textContent = wa && crm && tieneDocs ? "Tus conexiones" : "Conecta a tu asistente";
   $("atajos").hidden = !fuente;
 }
-$("pFuente").addEventListener("click", () => $("fuBtn").click());
 $("pWa").addEventListener("click", () => { $("waBtn").scrollIntoView({ behavior: "smooth", block: "center" }); if (!$("waBtn").dataset.on) $("waBtn").click(); });
-$("pNombre").addEventListener("click", () => { if ($("atPanel").hidden) $("atEdit").click(); $("atPanel").scrollIntoView({ behavior: "smooth", block: "center" }); });
+$("pCrm").addEventListener("click", () => { if ($("crmBtn").dataset.on) $("fuBtn").click(); else { $("crmBtn").scrollIntoView({ behavior: "smooth", block: "center" }); $("crmBtn").click(); } });
+$("pDocs").addEventListener("click", () => { $("fuBtn").click(); setTimeout(() => $("docIn").closest("label").scrollIntoView({ behavior: "smooth", block: "center" }), 300); });
 
 // Botones de acceso rápido y nombre del asistente: cada usuario los elige (se guardan en su cuenta).
 let perfilApp = { asistente: "", atajos: [] };
