@@ -2,10 +2,6 @@
 // Lee del CRM conectado (hoy monday) lo que está pendiente o hay que revisar, agrupado por etapa.
 // Solo lectura: no cambia nada en el CRM.
 
-const DONE = /(listo|hecho|done|terminad|cerrad|ganad|perdid|entregad|complet|descartad|desiert|deciert|rechaz|archiv|pagad|finaliz|no aplica|acept|compr[oó] con|enviado a |derivad|lista negra)/i;
-const SKIP_BOARD = /(cat[aá]logo|art[ií]culo|producto|inventario|ficha|proveedor|plantilla|template|prueba|demo|subelementos|subitems)/i;
-const DUE = /(pr[oó]xim|venc|v[aá]lid|l[ií]mite|plazo|llamad|saldo|seguimiento|recordar)/i;
-const today = () => new Date().toISOString().slice(0, 10);
 const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
 const norm = (s) => String(s || "").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/\s+/g, " ").trim();
 const nice = (s) => (s === s.toUpperCase() ? s.charAt(0) + s.slice(1).toLowerCase() : s);
@@ -13,39 +9,9 @@ const nice = (s) => (s === s.toUpperCase() ? s.charAt(0) + s.slice(1).toLowerCas
 // Cada tablero de ventas es una etapa (p. ej. Adjudicados → Para cotizar → Seguimiento).
 // Pendiente = lo que no está terminado según su estado. Vencido = una fecha de próximo paso ya pasó.
 export async function cargarPendientes(apiCall) {
-  const q = (query) => apiCall("/crm/monday/api", { method: "POST", body: JSON.stringify({ query }) }).then((r) => {
-    if (r.errors?.length && !r.data) throw new Error(r.errors[0].message || "error del CRM");
-    return r.data;
-  });
-  const lista = await q(`query { boards(limit: 40, order_by: used_at, state: active) { id name type items_count columns { id title type } } }`);
-  const cand = (lista?.boards || [])
-    .filter((b) => b.type === "board" && b.items_count > 0 && b.items_count <= 800 && !SKIP_BOARD.test(b.name) && (b.columns || []).some((c) => c.type === "status"))
-    .slice(0, 6);
-  if (!cand.length) return resumen([]);
-  const det = await q(`query { boards(ids: [${cand.map((b) => b.id).join(",")}]) { id items_page(limit: 100) { items { id name updated_at group { title } column_values { id type text } } } } }`);
-  const hoy = today(), etapas = [];
-  for (const b of cand) {
-    const items = (det?.boards || []).find((x) => String(x.id) === String(b.id))?.items_page?.items || [];
-    const cols = Object.fromEntries(b.columns.map((c) => [c.id, c]));
-    const st = b.columns.filter((c) => c.type === "status");
-    const main = st.find((c) => /etapa/i.test(c.title)) || st.find((c) => /^estado$/i.test(c.title.trim())) || st.find((c) => /estado|status/i.test(c.title)) || st[0];
-    const estados = st.filter((c) => c === main || /^estado/i.test(c.title.trim()));
-    const pend = [];
-    for (const it of items) {
-      const cv = Object.fromEntries((it.column_values || []).map((v) => [v.id, v]));
-      if (DONE.test(it.group?.title || "") || estados.some((c) => DONE.test(cv[c.id]?.text || ""))) continue;
-      if (/^(agregar elemento|nuevo elemento|new item|elemento|item|sin nombre)$/i.test((it.name || "").trim())) continue; // filas vacías de monday
-      const vencido = b.columns.some((c) => c.type === "date" && DUE.test(c.title) && (cv[c.id]?.text || "9999").slice(0, 10) < hoy);
-      const campos = (it.column_values || [])
-        .filter((v) => v.text && !["subtasks", "board_relation", "mirror", "file", "doc", "button", "link"].includes(v.type) && v.text.length < 160)
-        .map((v) => [cols[v.id]?.title || v.id, v.text]);
-      pend.push({ id: it.id, name: it.name, etapa: nice(b.name), tablero: nice(b.name), estado: (main && cv[main.id]?.text) || "", vencido, updated: it.updated_at, campos });
-    }
-    if (!pend.length) continue;
-    pend.sort((a, z) => (z.vencido - a.vencido) || String(a.updated).localeCompare(String(z.updated)));
-    etapas.push({ nombre: nice(b.name), tablero: nice(b.name), items: pend });
-  }
-  return resumen(etapas);
+  // El servidor aplica lo que el usuario eligió en «Lo que sabe tu asistente» (tableros y columnas).
+  const d = await apiCall("/pendientes");
+  return resumen(d.etapas || []);
 }
 
 function resumen(etapas) {

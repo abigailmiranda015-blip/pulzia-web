@@ -48,6 +48,15 @@ input { height: 50px; border-radius: 12px; border: 2px solid var(--line); backgr
 .muted a, .link { color: var(--accent); font-weight: 700; background: none; border: 0; padding: 0; cursor: pointer; font-size: inherit; }
 .msg { margin: 0; padding: 10px 12px; border-radius: 12px; font-size: 14px; background: #fde4e1; color: #b42318; }
 .msg.ok { background: #e1f3e8; color: #1e7f4e; }
+.fu-list { display: grid; gap: 8px; text-align: left; }
+.fu-b { border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; background: var(--card); }
+.fu-b > label { display: flex; gap: 10px; align-items: center; font-weight: 600; }
+.fu-b small { color: var(--muted); font-weight: 400; }
+.fu-b details { margin: 6px 0 0 28px; font-size: 14px; }
+.fu-b details summary { cursor: pointer; color: var(--accent); }
+.fu-cols { display: grid; gap: 4px; margin-top: 6px; }
+.fu-cols label { display: flex; gap: 8px; align-items: center; }
+.fu-b input { width: 18px; height: 18px; accent-color: var(--accent); flex: none; }
 .free { text-align: center; font-size: 14px; font-weight: 700; color: var(--accent); margin: 0; }
 h2 { margin: 0; font-size: 22px; }
 .back { align-self: flex-start; background: none; border: 0; color: #fff; font-weight: 700; font-size: 15px; cursor: pointer; padding: 4px 0; }
@@ -181,10 +190,27 @@ h2 { margin: 0; font-size: 22px; }
     <p class="muted" style="text-align:left">Conecta tu CRM para que tu asistente vea tus clientes y ventas. Funciona con monday, y pronto con otros.</p>
     <button class="btn ghost" type="button" id="crmBtn">Conectar mi CRM (monday)</button>
     <p class="msg" id="mCrm" hidden></p>
+    <button class="btn ghost" type="button" id="fuBtn">Lo que sabe tu asistente</button>
     <p class="muted" style="text-align:left" id="waTxt" hidden>Habla con Cami también por WhatsApp: recordatorios y respuestas rápidas sobre tus pendientes.</p>
     <button class="btn ghost" type="button" id="waBtn" hidden>Vincular WhatsApp</button>
     <p class="msg" id="mWa" hidden></p>
     <button class="btn ghost" type="button" id="logout">Cerrar sesión</button>
+  </div>
+</section>
+
+<!-- Lo que sabe tu asistente: tableros y columnas del CRM que puede ver -->
+<section class="screen" id="fuentes" hidden>
+  <header class="top small">
+    <div class="desk small"><video src="office/trabaja-pp.mp4" poster="office/poster.jpg" autoplay muted loop playsinline aria-hidden="true"></video></div>
+    <h2>Lo que sabe tu asistente</h2>
+  </header>
+  <div class="body">
+    <p class="muted" style="text-align:left" id="fuPlan">Cargando…</p>
+    <p class="muted" style="text-align:left">Marca los tableros que tu asistente puede revisar. Toca «columnas» para esconder datos que no quieras que vea (por ejemplo, costos o márgenes).</p>
+    <div id="fuList" class="fu-list"></div>
+    <button class="btn call-btn" type="button" id="fuSave">Guardar</button>
+    <button class="btn ghost" type="button" id="fuBack">Volver</button>
+    <p class="msg" id="mFu" hidden></p>
   </div>
 </section>
 
@@ -527,6 +553,43 @@ $("crmBtn").addEventListener("click", async () => {
     const { url } = await apiCall("/crm/monday/connect", { method: "POST" });
     location.href = url;
   } catch { say(m, "No se pudo conectar. Prueba de nuevo en un momento."); }
+});
+// Lo que sabe tu asistente: el usuario elige tableros y esconde columnas. El servidor lo aplica en la tele, WhatsApp y Claude.
+let fuData = null;
+const escH = (t) => String(t ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
+async function showFuentes() {
+  window.__go?.("fuentes");
+  const m = $("mFu"); say(m, ""); $("fuList").innerHTML = ""; $("fuPlan").textContent = "Cargando…";
+  try {
+    fuData = await apiCall("/fuentes");
+    const planes = { prueba: "Prueba", basico: "Básico", medio: "Medio", empresa: "Empresa" };
+    $("fuPlan").textContent = `Plan ${planes[fuData.plan] || fuData.plan}: ${fuData.usadas} de ${fuData.limite} fuente${fuData.limite === 1 ? "" : "s"} conectada${fuData.usadas === 1 ? "" : "s"}.` + (fuData.crm ? ` CRM: ${fuData.crm}.` : "");
+    if (!fuData.crm) { $("fuList").innerHTML = '<p class="muted">Primero conecta tu CRM en la pantalla de inicio.</p>'; return; }
+    $("fuList").innerHTML = fuData.boards.map((b) => `
+      <div class="fu-b" data-id="${escH(b.id)}">
+        <label><input type="checkbox" class="fu-on" ${b.on ? "checked" : ""}> <span>${escH(b.name)} <small>· ${b.items} elementos${b.espacio ? " · " + escH(b.espacio) : ""}</small></span></label>
+        <details><summary>columnas</summary><div class="fu-cols">${b.columns.map((c) => `<label><input type="checkbox" class="fu-col" value="${escH(c.id)}" ${b.hidden.includes(c.id) ? "" : "checked"}> ${escH(c.title)}</label>`).join("")}</div></details>
+      </div>`).join("");
+  } catch { say(m, "No se pudo cargar. Prueba de nuevo en un momento."); }
+}
+$("fuBtn").addEventListener("click", showFuentes);
+$("fuBack").addEventListener("click", () => window.__go?.("home"));
+$("fuList").addEventListener("change", (e) => {
+  if (!e.target.classList.contains("fu-on")) return;
+  const n = $("fuList").querySelectorAll(".fu-on:checked").length;
+  if (n > 10) { e.target.checked = false; say($("mFu"), "Puedes elegir hasta 10 tableros."); }
+});
+$("fuSave").addEventListener("click", async () => {
+  const m = $("mFu"); say(m, "");
+  const boards = {};
+  $("fuList").querySelectorAll(".fu-b").forEach((el) => {
+    boards[el.dataset.id] = { on: el.querySelector(".fu-on").checked, hidden: [...el.querySelectorAll(".fu-col")].filter((c) => !c.checked).map((c) => c.value) };
+  });
+  try {
+    const r = await apiCall("/fuentes", { method: "POST", body: JSON.stringify({ boards }) });
+    datos = null; datosP = null;
+    say(m, `Listo. Tu asistente revisará ${r.tableros} tablero${r.tableros === 1 ? "" : "s"}.`, true);
+  } catch { say(m, "No se pudo guardar. Prueba de nuevo."); }
 });
 // WhatsApp: la app da un código y la persona se lo manda al número de Pulzia (así se comprueba que el número es suyo).
 async function refreshWa() {
