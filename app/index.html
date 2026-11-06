@@ -271,6 +271,17 @@ h2 { margin: 0; font-size: 22px; }
     <p class="muted" style="text-align:left" id="fuPlan">Cargando…</p>
     <p class="muted" style="text-align:left">Marca los tableros que tu asistente puede revisar. Si quieres, dale permiso para hacer cambios en alguno (solo cuando tú se lo pidas; nunca borra nada). Toca «columnas» para esconder datos que no quieras que vea, como costos o márgenes.</p>
     <div id="fuList" class="fu-list"></div>
+    <h3 class="fu-h">Correo</h3>
+    <div id="mailBox" class="fu-b" style="display:grid;gap:8px">
+      <p class="muted" style="margin:0" id="mailTxt">Conecta tu correo para que tu asistente te avise de correos nuevos y te deje respuestas listas.</p>
+      <button class="btn ghost" type="button" id="mailBtn">Conectar Outlook</button>
+      <div id="mailPerm" hidden style="display:grid;gap:6px">
+        <label class="fu-ed" style="margin:0"><input type="checkbox" id="mAvisar"> Avisarme por WhatsApp cuando llegue un correo</label>
+        <label class="fu-ed" style="margin:0"><input type="checkbox" id="mBorr"> Dejar respuestas en borradores para que yo las envíe</label>
+        <label class="fu-ed" style="margin:0"><input type="checkbox" id="mEnv"> Enviar correos por mí (siempre me pregunta antes)</label>
+      </div>
+      <p class="msg" id="mMail" hidden></p>
+    </div>
     <h3 class="fu-h">Documentos y planillas</h3>
     <p class="muted" style="text-align:left;margin:0">Sube PDF, Word, Excel, CSV, texto o imágenes (hasta 10 MB cada uno). Tu asistente los lee para responderte. Los documentos cuentan como 1 fuente y cada Excel como 1 fuente.</p>
     <label class="btn ghost fu-up">+ Subir archivos<input type="file" id="docIn" multiple accept=".pdf,.doc,.docx,.xls,.xlsx,.csv,.txt,.md,image/*" hidden></label>
@@ -602,7 +613,8 @@ async function refreshCrm() {
     // si se acaba de conectar en este navegador, se confía en eso.
     let just = null;
     try { just = JSON.parse(localStorage.getItem("pulzia_crm_just") || "null"); } catch {}
-    const on = crms.find((c) => c.connected) || (just && Date.now() - just.at < 5 * 60e3 ? crms.find((c) => c.id === just.id) : null);
+    const soloCrm = crms.filter((c) => (c.tipo || "crm") === "crm");
+    const on = soloCrm.find((c) => c.connected) || (just && Date.now() - just.at < 5 * 60e3 ? crms.find((c) => c.id === just.id) : null);
     crmName = on ? on.name : "ninguno";
     window.__crm = crmName;
     $("crmBtn").textContent = on ? "✓ " + on.name + " conectado (tocar para desconectar)" : "Conectar mi CRM (monday)";
@@ -738,7 +750,34 @@ async function showFuentes() {
       </div>`).join("");
   } catch { say(m, "No se pudo cargar. Prueba de nuevo en un momento."); }
 }
-$("fuBtn").addEventListener("click", () => { showFuentes(); cargarDocs(); });
+$("fuBtn").addEventListener("click", () => { showFuentes(); cargarDocs(); cargarCorreo(); });
+// Correo: conectar Outlook y elegir qué puede hacer el asistente.
+async function cargarCorreo() {
+  try {
+    const r = await apiCall("/correo");
+    $("mailBox").hidden = false;
+    if (!r.listo) { $("mailTxt").textContent = "Muy pronto podrás conectar tu correo Outlook."; $("mailBtn").hidden = true; $("mailPerm").hidden = true; return; }
+    $("mailBtn").hidden = false;
+    $("mailBtn").dataset.on = r.conectado ? "1" : "";
+    $("mailBtn").textContent = r.conectado ? "✓ Outlook conectado (tocar para desconectar)" : "Conectar Outlook";
+    $("mailPerm").hidden = !r.conectado;
+    $("mAvisar").checked = r.cfg.avisar; $("mBorr").checked = r.cfg.borrador; $("mEnv").checked = r.cfg.enviar;
+  } catch { $("mailBox").hidden = true; }
+}
+$("mailBtn").addEventListener("click", async () => {
+  const m = $("mMail"); say(m, "");
+  try {
+    if ($("mailBtn").dataset.on) { await apiCall("/crm/microsoft", { method: "DELETE" }); return cargarCorreo(); }
+    const { url } = await apiCall("/crm/microsoft/connect", { method: "POST" });
+    location.href = url;
+  } catch { say(m, "No se pudo conectar ahora. Prueba en un momento."); }
+});
+$("mailPerm").addEventListener("change", async () => {
+  try {
+    await apiCall("/correo", { method: "POST", body: JSON.stringify({ avisar: $("mAvisar").checked, borrador: $("mBorr").checked, enviar: $("mEnv").checked }) });
+    say($("mMail"), "Guardado.", true);
+  } catch { say($("mMail"), "No se pudo guardar."); }
+});
 
 // Documentos: el texto se saca aquí en el navegador (PDF, Word, Excel) y se guarda junto al archivo en tu cuenta.
 const CDN = "https://cdnjs.cloudflare.com/ajax/libs/";
@@ -840,9 +879,10 @@ async function finishCrm() {
   if (!code || !state) return;
   history.replaceState(null, "", location.pathname + "#home");
   try {
-    await apiCall("/crm/monday/callback", { method: "POST", body: JSON.stringify({ code, state }) });
-    try { localStorage.setItem("pulzia_crm_just", JSON.stringify({ id: "monday", at: Date.now() })); } catch {}
-    say($("mCrm"), "¡Listo! Tu monday quedó conectado.", true);
+    const r = await apiCall("/crm/callback", { method: "POST", body: JSON.stringify({ code, state }) });
+    if (r.id === "microsoft") { say($("mCrm"), "¡Listo! Tu Outlook quedó conectado. Elige qué puede hacer tu asistente en «Lo que sabe tu asistente».", true); return; }
+    try { localStorage.setItem("pulzia_crm_just", JSON.stringify({ id: r.id || "monday", at: Date.now() })); } catch {}
+    say($("mCrm"), "¡Listo! Tu " + (r.name || "CRM") + " quedó conectado.", true);
   }
   catch (e) { say($("mCrm"), "No se pudo terminar la conexión: " + e.message); }
 }
