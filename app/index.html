@@ -57,6 +57,8 @@ input { height: 50px; border-radius: 12px; border: 2px solid var(--line); backgr
 .chat-m.yo { align-self: flex-end; background: #d8f1ea; color: var(--ink); }
 .chat-m.ella { align-self: flex-start; background: var(--card); border: 1px solid var(--line); color: var(--ink); }
 .chat-m.est { align-self: flex-start; color: var(--muted); font-style: italic; background: none; padding: 4px 2px; }
+.chat-m a { color: var(--accent); word-break: break-all; }
+.chat-m a.chat-wa { display: block; margin-top: 8px; padding: 8px 10px; border-radius: 10px; background: #25d366; color: #fff; text-decoration: none; text-align: center; font-weight: 600; word-break: normal; }
 .chat-f { display: block; margin-top: 8px; padding: 8px 10px; border-radius: 10px; border: 1px solid var(--line); background: var(--bg); color: var(--accent); font: inherit; cursor: pointer; text-align: left; }
 .chat-in { display: flex; gap: 8px; padding: 10px 16px calc(10px + env(safe-area-inset-bottom)); background: var(--card); border-top: 1px solid var(--line); position: sticky; bottom: 0; }
 .chat-in input { flex: 1; min-width: 0; font: inherit; padding: 12px; border: 1px solid var(--line); border-radius: 12px; }
@@ -690,7 +692,15 @@ $("atSave").addEventListener("click", async () => {
 
 // Chat por escrito: mismo asistente y misma conversación que por WhatsApp.
 function burbuja(quien, texto, archivos = []) {
-  const d = document.createElement("div"); d.className = "chat-m " + quien; d.textContent = texto;
+  const d = document.createElement("div"); d.className = "chat-m " + quien;
+  // Links tocables (los de WhatsApp se muestran como botón); el resto queda como texto.
+  String(texto || "").split(/(https:\/\/[^\s]+)/g).forEach((t, i) => {
+    if (i % 2 === 0) { if (t) d.append(t.replace(/👉 Toca para enviarlo desde tu WhatsApp:\s*$/, "")); return; }
+    const l = document.createElement("a"); l.href = t; l.target = "_blank"; l.rel = "noopener";
+    l.textContent = t.startsWith("https://wa.me/") ? "📲 Enviar por WhatsApp" : t;
+    if (t.startsWith("https://wa.me/")) l.className = "chat-wa";
+    d.append(l);
+  });
   for (const a of archivos) { const b = document.createElement("button"); b.type = "button"; b.className = "chat-f"; b.textContent = "📎 " + a.name; b.dataset.id = a.id; b.dataset.name = a.name; d.append(b); }
   $("chatLog").append(d); $("chatLog").scrollTop = $("chatLog").scrollHeight; return d;
 }
