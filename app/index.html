@@ -59,6 +59,12 @@ input { height: 50px; border-radius: 12px; border: 2px solid var(--line); backgr
 .at-row { display: flex; gap: 6px; }
 .at-row input { flex: 1; }
 .at-row button { border: 1px solid var(--line); background: none; border-radius: 10px; width: 40px; font-size: 18px; cursor: pointer; }
+.fu-h { margin: 8px 0 0; font-size: 16px; text-align: left; }
+.fu-up { display: flex; align-items: center; justify-content: center; cursor: pointer; }
+.doc-r { display: flex; gap: 10px; align-items: center; border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; background: var(--card); }
+.doc-r span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.doc-r small { color: var(--muted); }
+.doc-r button { border: 0; background: none; color: var(--muted); font: inherit; font-size: 13px; cursor: pointer; }
 .fu-list { display: grid; gap: 8px; text-align: left; }
 .fu-b { border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; background: var(--card); }
 .fu-b > label { display: flex; gap: 10px; align-items: center; font-weight: 600; }
@@ -229,6 +235,11 @@ h2 { margin: 0; font-size: 22px; }
     <p class="muted" style="text-align:left" id="fuPlan">Cargando…</p>
     <p class="muted" style="text-align:left">Marca los tableros que tu asistente puede revisar. Toca «columnas» para esconder datos que no quieras que vea (por ejemplo, costos o márgenes).</p>
     <div id="fuList" class="fu-list"></div>
+    <h3 class="fu-h">Documentos y planillas</h3>
+    <p class="muted" style="text-align:left;margin:0">Sube PDF, Word, Excel, CSV, texto o imágenes (hasta 10 MB cada uno). Tu asistente los lee para responderte. Los documentos cuentan como 1 fuente y cada Excel como 1 fuente.</p>
+    <label class="btn ghost fu-up">+ Subir archivos<input type="file" id="docIn" multiple accept=".pdf,.doc,.docx,.xls,.xlsx,.csv,.txt,.md,image/*" hidden></label>
+    <div id="docList" class="fu-list"></div>
+    <p class="msg" id="mDoc" hidden></p>
     <button class="btn call-btn" type="button" id="fuSave">Guardar</button>
     <button class="btn ghost" type="button" id="fuBack">Volver</button>
     <p class="msg" id="mFu" hidden></p>
@@ -623,8 +634,8 @@ async function showFuentes() {
   try {
     fuData = await apiCall("/fuentes");
     const planes = { prueba: "Prueba", basico: "Básico", medio: "Medio", empresa: "Empresa" };
-    $("fuPlan").textContent = `Plan ${planes[fuData.plan] || fuData.plan}: ${fuData.usadas} de ${fuData.limite} fuente${fuData.limite === 1 ? "" : "s"} conectada${fuData.usadas === 1 ? "" : "s"}.` + (fuData.crm ? ` CRM: ${fuData.crm}.` : "");
-    if (!fuData.crm) { $("fuList").innerHTML = '<p class="muted">Primero conecta tu CRM en la pantalla de inicio.</p>'; return; }
+    $("fuPlan").textContent = `Plan ${planes[fuData.plan] || fuData.plan}: ${fuData.usadas} de ${fuData.limite} fuente${fuData.limite === 1 ? "" : "s"} en uso.` + (fuData.crm ? ` CRM: ${fuData.crm}.` : "");
+    if (!fuData.crm) { $("fuList").innerHTML = '<p class="muted" style="margin:0">No tienes un CRM conectado. Puedes conectarlo en Inicio, o usar solo tus documentos.</p>'; return; }
     $("fuList").innerHTML = fuData.boards.map((b) => `
       <div class="fu-b" data-id="${escH(b.id)}">
         <label><input type="checkbox" class="fu-on" ${b.on ? "checked" : ""}> <span>${escH(b.name)} <small>· ${b.items} elementos${b.espacio ? " · " + escH(b.espacio) : ""}</small></span></label>
@@ -632,7 +643,62 @@ async function showFuentes() {
       </div>`).join("");
   } catch { say(m, "No se pudo cargar. Prueba de nuevo en un momento."); }
 }
-$("fuBtn").addEventListener("click", showFuentes);
+$("fuBtn").addEventListener("click", () => { showFuentes(); cargarDocs(); });
+
+// Documentos: el texto se saca aquí en el navegador (PDF, Word, Excel) y se guarda junto al archivo en tu cuenta.
+const CDN = "https://cdnjs.cloudflare.com/ajax/libs/";
+const libs = {};
+const usar = (k, url, glob) => libs[k] || (libs[k] = new Promise((ok, no) => { const sc = document.createElement("script"); sc.src = CDN + url; sc.onload = () => ok(window[glob]); sc.onerror = no; document.head.append(sc); }));
+async function textoDe(f) {
+  const n = f.name.toLowerCase(), buf = await f.arrayBuffer();
+  if (n.endsWith(".pdf")) {
+    const pdfjs = await usar("pdf", "pdf.js/3.11.174/pdf.min.js", "pdfjsLib");
+    pdfjs.GlobalWorkerOptions.workerSrc = CDN + "pdf.js/3.11.174/pdf.worker.min.js";
+    const doc = await pdfjs.getDocument({ data: buf }).promise; let t = "";
+    for (let i = 1; i <= Math.min(doc.numPages, 200); i++) t += (await (await doc.getPage(i)).getTextContent()).items.map((x) => x.str).join(" ") + "\n";
+    return t;
+  }
+  if (n.endsWith(".docx")) return (await (await usar("docx", "mammoth/1.6.0/mammoth.browser.min.js", "mammoth")).extractRawText({ arrayBuffer: buf })).value;
+  if (/\.(xlsx?|csv)$/.test(n)) {
+    const X = await usar("xlsx", "xlsx/0.18.5/xlsx.full.min.js", "XLSX"), wb = X.read(buf, { type: "array" });
+    return wb.SheetNames.map((h) => "Hoja " + h + ":\n" + X.utils.sheet_to_csv(wb.Sheets[h])).join("\n\n");
+  }
+  if (/\.(txt|md)$/.test(n) || f.type.startsWith("text/")) return new TextDecoder().decode(buf);
+  return "";
+}
+async function cargarDocs() {
+  try {
+    const r = await apiCall("/docs");
+    $("docList").innerHTML = r.docs.length ? r.docs.map((d) => `<div class="doc-r" data-id="${escH(d.id)}"><span>${escH(d.name)} <small>· ${Math.max(1, Math.round(d.size / 1024))} KB${d.chars ? "" : " · sin texto"}</small></span><button type="button">Quitar</button></div>`).join("") : '<p class="muted" style="margin:0">Todavía no subes archivos.</p>';
+  } catch { $("docList").innerHTML = ""; }
+}
+$("docIn").addEventListener("change", async (e) => {
+  const m = $("mDoc"), files = [...e.target.files]; e.target.value = "";
+  for (const f of files) {
+    say(m, "Subiendo " + f.name + "…", true);
+    try {
+      if (f.size > 10 * 1024 * 1024) throw new Error(f.name + " pesa más de 10 MB.");
+      let text = ""; try { text = await textoDe(f); } catch {}
+      const { id } = await apiCall("/docs", { method: "POST", body: JSON.stringify({ name: f.name, type: f.type, size: f.size, text: text || (f.type.startsWith("image/") ? "Imagen: " + f.name : "") }) });
+      const r = await fetch(API + "/docs/" + id + "/archivo", { method: "PUT", headers: { "Content-Type": "application/octet-stream", Authorization: "Bearer " + (await auth.currentUser.getIdToken()) }, body: f });
+      if (!r.ok) throw new Error("No se pudo guardar " + f.name + ".");
+    } catch (err) { say(m, err.message || "No se pudo subir " + f.name + "."); await cargarDocs(); return; }
+  }
+  say(m, files.length === 1 ? "Listo, tu asistente ya puede leer " + files[0].name + "." : "Listo, se subieron " + files.length + " archivos.", true);
+  cargarDocs(); showFuentesPlan();
+});
+$("docList").addEventListener("click", async (e) => {
+  const row = e.target.closest(".doc-r"); if (!row || e.target.tagName !== "BUTTON") return;
+  try { await apiCall("/docs/" + row.dataset.id, { method: "DELETE" }); } catch {}
+  cargarDocs(); showFuentesPlan();
+});
+async function showFuentesPlan() {
+  try {
+    const r = await apiCall("/docs");
+    const planes = { prueba: "Prueba", basico: "Básico", medio: "Medio", empresa: "Empresa" };
+    $("fuPlan").textContent = `Plan ${planes[r.clave] || r.clave}: ${r.usadas} de ${r.limite} fuente${r.limite === 1 ? "" : "s"} en uso.`;
+  } catch {}
+}
 $("fuBack").addEventListener("click", () => window.__go?.("home"));
 $("fuList").addEventListener("change", (e) => {
   if (!e.target.classList.contains("fu-on")) return;
