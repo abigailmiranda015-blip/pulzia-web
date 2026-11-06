@@ -61,6 +61,13 @@ input { height: 50px; border-radius: 12px; border: 2px solid var(--line); backgr
 .chat-in { display: flex; gap: 8px; padding: 10px 16px calc(10px + env(safe-area-inset-bottom)); background: var(--card); border-top: 1px solid var(--line); position: sticky; bottom: 0; }
 .chat-in input { flex: 1; min-width: 0; font: inherit; padding: 12px; border: 1px solid var(--line); border-radius: 12px; }
 .chat-in .btn { width: auto; padding: 0 16px; margin: 0; }
+.pasos { display: grid; gap: 8px; padding: 14px; border: 1px solid var(--line); border-radius: 16px; background: var(--card); text-align: left; }
+.pasos[hidden] { display: none; }
+.paso { display: flex; gap: 10px; align-items: center; padding: 12px; border-radius: 12px; border: 1px solid var(--line); background: var(--bg); color: var(--ink); font: inherit; font-weight: 600; text-align: left; cursor: pointer; }
+.paso .pc { flex: none; width: 26px; height: 26px; border-radius: 50%; display: grid; place-items: center; background: var(--accent); color: #fff; font-size: 14px; }
+.paso.ok { color: var(--muted); font-weight: 400; text-decoration: line-through; }
+.paso.ok .pc { background: #1e7f4e; }
+.atajos[hidden] { display: none; }
 .atajos { display: flex; flex-wrap: wrap; gap: 8px; }
 .atajos button { flex: 1 1 calc(50% - 8px); min-width: 0; padding: 12px; border-radius: 14px; border: 1px solid var(--line); background: var(--card); color: var(--ink); font: inherit; font-weight: 600; text-align: left; cursor: pointer; }
 .atajos button:active { background: #e8f3f0; }
@@ -215,7 +222,14 @@ h2 { margin: 0; font-size: 22px; }
     <h2 id="hello">¡Bienvenida!</h2>
   </header>
   <div class="body">
-    <div class="atajos" id="atajos" aria-label="Accesos rápidos"></div>
+    <div class="pasos" id="pasos" hidden>
+      <b>Primeros pasos</b>
+      <p class="muted" style="margin:0;text-align:left">Dale a tu asistente lo que necesita para ayudarte:</p>
+      <button type="button" class="paso" id="pFuente"><span class="pc">1</span><span>Conecta tu CRM o sube tus documentos</span></button>
+      <button type="button" class="paso" id="pWa"><span class="pc">2</span><span>Vincula tu WhatsApp</span></button>
+      <button type="button" class="paso" id="pNombre"><span class="pc">3</span><span>Ponle nombre a tu asistente y elige tus botones</span></button>
+    </div>
+    <div class="atajos" id="atajos" aria-label="Accesos rápidos" hidden></div>
     <button class="btn ghost" type="button" id="chatBtn">Escribirle a tu asistente</button>
     <button class="link-btn" type="button" id="atEdit">Editar botones y nombre</button>
     <div class="at-edit" id="atPanel" hidden>
@@ -609,6 +623,20 @@ $("crmBtn").addEventListener("click", async () => {
     location.href = url;
   } catch { say(m, "No se pudo conectar. Prueba de nuevo en un momento."); }
 });
+// Primeros pasos: hasta que el asistente tenga de dónde sacar información, se muestran arriba en vez de los botones.
+let tieneDocs = false;
+async function pintarPasos() {
+  try { tieneDocs = (await apiCall("/docs")).docs.length > 0; } catch {}
+  const fuente = !!$("crmBtn").dataset.on || tieneDocs, wa = !!$("waBtn").dataset.on, nombre = !!perfilApp.asistente;
+  [["pFuente", fuente, "1"], ["pWa", wa, "2"], ["pNombre", nombre, "3"]].forEach(([id, ok, n]) => { $(id).classList.toggle("ok", ok); $(id).querySelector(".pc").textContent = ok ? "✓" : n; });
+  const listo = fuente && wa && nombre;
+  $("pasos").hidden = listo;
+  $("atajos").hidden = !fuente;
+}
+$("pFuente").addEventListener("click", () => $("fuBtn").click());
+$("pWa").addEventListener("click", () => { $("waBtn").scrollIntoView({ behavior: "smooth", block: "center" }); if (!$("waBtn").dataset.on) $("waBtn").click(); });
+$("pNombre").addEventListener("click", () => { if ($("atPanel").hidden) $("atEdit").click(); $("atPanel").scrollIntoView({ behavior: "smooth", block: "center" }); });
+
 // Botones de acceso rápido y nombre del asistente: cada usuario los elige (se guardan en su cuenta).
 let perfilApp = { asistente: "", atajos: [] };
 const ATAJOS_BASE = ["¿Cómo vamos hoy?", "¿A quién tengo que llamar hoy?", "¿Qué tengo vencido?", "Muéstrame mis pendientes por etapa"];
@@ -644,7 +672,7 @@ $("atSave").addEventListener("click", async () => {
   const atajos = [...$("atList").querySelectorAll("input")].map((i) => i.value.trim()).filter(Boolean).slice(0, 6);
   try {
     perfilApp = { ...perfilApp, ...(await apiCall("/perfil", { method: "POST", body: JSON.stringify({ asistente: $("atName").value.trim(), atajos }) })) };
-    pintarAtajos(); $("atPanel").hidden = true;
+    pintarAtajos(); $("atPanel").hidden = true; pintarPasos();
   } catch { say($("mAt"), "No se pudo guardar. Prueba de nuevo."); }
 });
 
@@ -766,7 +794,7 @@ async function showFuentesPlan() {
     $("fuPlan").textContent = `Plan ${planes[r.clave] || r.clave}: ${r.usadas} de ${r.limite} fuente${r.limite === 1 ? "" : "s"} en uso.`;
   } catch {}
 }
-$("fuBack").addEventListener("click", () => window.__go?.("home"));
+$("fuBack").addEventListener("click", () => { window.__go?.("home"); pintarPasos(); });
 $("fuList").addEventListener("change", (e) => {
   if (!e.target.classList.contains("fu-on")) return;
   const n = $("fuList").querySelectorAll(".fu-on:checked").length;
@@ -844,9 +872,7 @@ onAuthStateChanged(auth, (user) => {
   if (user) {
     $("hello").textContent = "¡Hola, " + ((user.displayName || "").split(" ")[0] || "bienvenida") + "!";
     if (mcpPend()) showMcp(); else window.__go?.("home");
-    finishCrm().then(refreshCrm);
-    refreshWa();
-    refreshPerfil();
+    Promise.all([finishCrm().then(refreshCrm), refreshWa(), refreshPerfil()]).then(pintarPasos);
   } else if (!document.getElementById("home").hidden) window.__go?.("welcome");
 });
 </script>
