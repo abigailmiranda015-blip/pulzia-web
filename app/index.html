@@ -323,8 +323,7 @@ $("forgot").addEventListener("click", async () => {
   catch (err) { say(m, msg(err)); }
 });
 
-// Llamada por internet con la asistente (voz Cami-pulzia en ElevenLabs). Funciona con o sin CRM conectado.
-const AGENT_ID = "agent_9401m6prfzjjfszv8e8wq4pf1zr0";
+// Llamada por internet con la asistente (servidor de voz propio en RunPod, con la voz de Camila). Funciona con o sin CRM conectado.
 let conv = null, tick = null, t0 = 0;
 // Oficina (videos que se funden en poses que calzan), la tele con los pendientes y la ficha de abajo.
 let office = null, tvMode = false, datos = null, datosP = null;
@@ -427,44 +426,45 @@ $("callBtn").addEventListener("click", async () => {
   cerrarPantalla(); datos = null; datosP = null; tvMode = false; stage.classList.remove("tvmode");
   (await getOffice()).start(); layout();
   pendientes(); // se lee el CRM de antemano para que la tele aparezca al tiro
-  // Motor de la llamada: la voz propia de Pulzia si ya está conectada (y le quedan minutos); si no, ElevenLabs.
-  const motor = new URLSearchParams(location.search).get("motor");
-  const own = motor === "eleven" ? null : await import("./voz-propia.js").catch(() => null);
+  // Motor de la llamada: el servidor de voz propio de Pulzia (RunPod), con la voz de Camila.
+  const own = await import("./voz-propia.js").catch(() => null);
   const st = own ? await own.voiceStatus(() => user.getIdToken()) : null;
-  if (own && st?.ready && st.left > 0) {
-    conv = own.startOwnVoiceCall({
-      getToken: () => user.getIdToken(),
-      crm: window.__crm || "ninguno",
-      onMode: (mode) => {
-        if (mode === "connected") { t0 = Date.now(); tick = setInterval(fmt, 1000); }
-        if (mode === "thinking") { $("cState").textContent = "Pensando…"; return; }
-        showTalk(mode === "speaking");
-      },
-      onError: (t) => ($("cState").textContent = t),
-      onEnd: () => { if (conv) endCall(); },
-    });
-    return;
+  if (!st?.ready || !(st.left > 0)) {
+    endCall();
+    return say(m, !st ? "No se pudo conectar la llamada. Revisa tu internet y prueba de nuevo." : st.left > 0 ? "Las llamadas todavía no están disponibles. Prueba en un rato." : st.plan === "prueba" ? "Se acabaron tus 15 minutos de prueba. Elige un plan para seguir llamando." : "Se acabaron tus minutos de llamada de este mes.");
   }
-  try {
-    const { Conversation } = await import("https://cdn.jsdelivr.net/npm/@elevenlabs/client@1.30.0/+esm");
-    conv = await Conversation.startSession({
-      agentId: AGENT_ID,
-      connectionType: "websocket",
-      dynamicVariables: {
-        nombre: ((user?.displayName || "").split(" ")[0]) || "",
-        asistente: "Camila",
-        crm: window.__crm || "ninguno",
-      },
-      clientTools: herramientas,
-      onConnect: () => { t0 = Date.now(); tick = setInterval(fmt, 1000); showTalk(false); },
-      onModeChange: ({ mode }) => showTalk(mode === "speaking"),
-      onDisconnect: () => { if (conv) endCall(); },
-      onError: () => { $("cState").textContent = "Se cortó la conexión"; },
-    });
-  } catch (err) {
-    window.__go?.("home");
-    say(m, "No se pudo conectar la llamada. Revisa tu internet y prueba de nuevo.");
-  }
+  // Si la persona lo pide con palabras claras, la tele o la ficha se muestran aunque Camila no ponga la marca.
+  let marcado = false;
+  const alEscuchar = (t) => {
+    marcado = false;
+    const q = (t || "").toLowerCase();
+    setTimeout(() => {
+      if (marcado) return;
+      const f = q.match(/ficha (?:de(?:l)?|del cliente)?\s*(.+?)[.?!]*$/);
+      if (f) herramientas.mostrar_ficha({ nombre: f[1] });
+      else if (/pendiente|por revisar|qu[eé] (tengo|hay) que (ver|revisar|hacer)|c[oó]mo va(n)? (todo|las ventas)/.test(q)) herramientas.mostrar_pendientes({});
+    }, 2500);
+  };
+  const alAccion = (a) => {
+    marcado = true;
+    if (a.accion === "tele") herramientas.mostrar_pendientes({});
+    else if (a.accion === "ficha") herramientas.mostrar_ficha({ nombre: a.nombre });
+    else if (a.accion === "cerrar") herramientas.cerrar_pantalla();
+  };
+  conv = own.startOwnVoiceCall({
+    getToken: () => user.getIdToken(),
+    crm: window.__crm || "ninguno",
+    getContexto: async () => (await pendientes())?.texto || "",
+    onHeard: alEscuchar,
+    onAccion: alAccion,
+    onMode: (mode) => {
+      if (mode === "connected") { t0 = Date.now(); tick = setInterval(fmt, 1000); $("cState").textContent = "Encendiendo a Camila…"; return; }
+      if (mode === "thinking") { $("cState").textContent = "Pensando…"; return; }
+      showTalk(mode === "speaking");
+    },
+    onError: (t) => ($("cState").textContent = t),
+    onEnd: () => { if (conv) endCall(); },
+  });
 });
 $("cEnd").addEventListener("click", endCall);
 $("cMute").addEventListener("click", () => {

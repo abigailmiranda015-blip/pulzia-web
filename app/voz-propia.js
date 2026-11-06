@@ -14,7 +14,7 @@ export async function voiceStatus(getToken) {
   }
 }
 
-export function startOwnVoiceCall({ getToken, crm = "ninguno", onMode, onSubtitle, onError, onEnd }) {
+export function startOwnVoiceCall({ getToken, crm = "ninguno", getContexto, onMode, onSubtitle, onHeard, onAccion, onError, onEnd }) {
   let stopped = false, ctx, stream, analyser, rec, chunks = [], speakingSince = 0, silentSince = 0, recording = false;
   let job = null, queue = [], playing = null, muted = false;
   const history = [];
@@ -51,7 +51,7 @@ export function startOwnVoiceCall({ getToken, crm = "ninguno", onMode, onSubtitl
     if (!b64 || stopped) return;
     onMode?.("thinking");
     let id;
-    try { id = (await api("/voice/turn", { method: "POST", body: JSON.stringify({ audio_b64: b64, history, crm }) })).id; }
+    try { id = (await api("/voice/turn", { method: "POST", body: JSON.stringify({ audio_b64: b64, history, crm, contexto: (await getContexto?.()) || undefined }) })).id; }
     catch (e) { onMode?.("listening"); return onError?.(e.status === 402 ? "Se acabaron tus minutos de llamada de este mes." : "No pude escucharte bien, ¿me lo repites?"); }
     job = id;
     let heard = "", reply = "";
@@ -60,7 +60,8 @@ export function startOwnVoiceCall({ getToken, crm = "ninguno", onMode, onSubtitl
       let s;
       try { s = await api("/voice/stream/" + id); } catch { continue; }
       for (const it of s.items || []) {
-        if (it.type === "heard") heard = it.text;
+        if (it.type === "heard") { heard = it.text; onHeard?.(heard); }
+        else if (it.type === "accion") onAccion?.(it);
         else if (it.type === "reply") reply = it.text;
         else if (it.type === "audio" && job === id) { queue.push(it); playNext(); }
         else if (it.type === "done") tries = 1e9;
@@ -127,13 +128,14 @@ export function startOwnVoiceCall({ getToken, crm = "ninguno", onMode, onSubtitl
   async function sendTextTurn(text) {
     onMode?.("thinking");
     try {
-      const { id } = await api("/voice/turn", { method: "POST", body: JSON.stringify({ text, history, crm }) });
+      const { id } = await api("/voice/turn", { method: "POST", body: JSON.stringify({ text, history, crm, contexto: (await getContexto?.()) || undefined }) });
       job = id;
       for (let tries = 0; tries < 200 && job === id && !stopped; tries++) {
         await new Promise((r) => setTimeout(r, 400));
         const s = await api("/voice/stream/" + id).catch(() => ({}));
         for (const it of s.items || []) {
-          if (it.type === "reply") history.push({ role: "assistant", content: it.text });
+          if (it.type === "accion") onAccion?.(it);
+          else if (it.type === "reply") history.push({ role: "assistant", content: it.text });
           else if (it.type === "audio" && job === id) { queue.push(it); playNext(); }
           else if (it.type === "done") tries = 1e9;
         }
