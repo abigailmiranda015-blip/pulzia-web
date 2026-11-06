@@ -70,6 +70,7 @@ input { height: 50px; border-radius: 12px; border: 2px solid var(--line); backgr
 .fu-b > label { display: flex; gap: 10px; align-items: center; font-weight: 600; }
 .fu-b small { color: var(--muted); font-weight: 400; }
 .fu-b details { margin: 6px 0 0 28px; font-size: 14px; }
+.fu-ed { display: flex; gap: 8px; align-items: flex-start; margin: 6px 0 0 28px; font-size: 13px; color: var(--muted); }
 .fu-b details summary { cursor: pointer; color: var(--accent); }
 .fu-cols { display: grid; gap: 4px; margin-top: 6px; }
 .fu-cols label { display: flex; gap: 8px; align-items: center; }
@@ -233,7 +234,7 @@ h2 { margin: 0; font-size: 22px; }
   </header>
   <div class="body">
     <p class="muted" style="text-align:left" id="fuPlan">Cargando…</p>
-    <p class="muted" style="text-align:left">Marca los tableros que tu asistente puede revisar. Toca «columnas» para esconder datos que no quieras que vea (por ejemplo, costos o márgenes).</p>
+    <p class="muted" style="text-align:left">Marca los tableros que tu asistente puede revisar. Si quieres, dale permiso para hacer cambios en alguno (solo cuando tú se lo pidas; nunca borra nada). Toca «columnas» para esconder datos que no quieras que vea, como costos o márgenes.</p>
     <div id="fuList" class="fu-list"></div>
     <h3 class="fu-h">Documentos y planillas</h3>
     <p class="muted" style="text-align:left;margin:0">Sube PDF, Word, Excel, CSV, texto o imágenes (hasta 10 MB cada uno). Tu asistente los lee para responderte. Los documentos cuentan como 1 fuente y cada Excel como 1 fuente.</p>
@@ -639,6 +640,7 @@ async function showFuentes() {
     $("fuList").innerHTML = fuData.boards.map((b) => `
       <div class="fu-b" data-id="${escH(b.id)}">
         <label><input type="checkbox" class="fu-on" ${b.on ? "checked" : ""}> <span>${escH(b.name)} <small>· ${b.items} elementos${b.espacio ? " · " + escH(b.espacio) : ""}</small></span></label>
+        <label class="fu-ed"><input type="checkbox" class="fu-edit" ${b.edit ? "checked" : ""}> Puede hacer cambios cuando se lo pidas (cambiar estado, dejar notas). Nunca borra.</label>
         <details><summary>columnas</summary><div class="fu-cols">${b.columns.map((c) => `<label><input type="checkbox" class="fu-col" value="${escH(c.id)}" ${b.hidden.includes(c.id) ? "" : "checked"}> ${escH(c.title)}</label>`).join("")}</div></details>
       </div>`).join("");
   } catch { say(m, "No se pudo cargar. Prueba de nuevo en un momento."); }
@@ -709,7 +711,7 @@ $("fuSave").addEventListener("click", async () => {
   const m = $("mFu"); say(m, "");
   const boards = {};
   $("fuList").querySelectorAll(".fu-b").forEach((el) => {
-    boards[el.dataset.id] = { on: el.querySelector(".fu-on").checked, hidden: [...el.querySelectorAll(".fu-col")].filter((c) => !c.checked).map((c) => c.value) };
+    boards[el.dataset.id] = { on: el.querySelector(".fu-on").checked, edit: el.querySelector(".fu-edit").checked, hidden: [...el.querySelectorAll(".fu-col")].filter((c) => !c.checked).map((c) => c.value) };
   });
   try {
     const r = await apiCall("/fuentes", { method: "POST", body: JSON.stringify({ boards }) });
