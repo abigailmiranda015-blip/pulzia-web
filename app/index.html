@@ -181,6 +181,9 @@ h2 { margin: 0; font-size: 22px; }
     <p class="muted" style="text-align:left">Conecta tu CRM para que tu asistente vea tus clientes y ventas. Funciona con monday, y pronto con otros.</p>
     <button class="btn ghost" type="button" id="crmBtn">Conectar mi CRM (monday)</button>
     <p class="msg" id="mCrm" hidden></p>
+    <p class="muted" style="text-align:left" id="waTxt" hidden>Habla con Cami también por WhatsApp: recordatorios y respuestas rápidas sobre tus pendientes.</p>
+    <button class="btn ghost" type="button" id="waBtn" hidden>Vincular WhatsApp</button>
+    <p class="msg" id="mWa" hidden></p>
     <button class="btn ghost" type="button" id="logout">Cerrar sesión</button>
   </div>
 </section>
@@ -525,6 +528,25 @@ $("crmBtn").addEventListener("click", async () => {
     location.href = url;
   } catch { say(m, "No se pudo conectar. Prueba de nuevo en un momento."); }
 });
+// WhatsApp: la app da un código y la persona se lo manda al número de Pulzia (así se comprueba que el número es suyo).
+async function refreshWa() {
+  try {
+    const w = await apiCall("/wa");
+    $("waBtn").dataset.on = w.linked ? "1" : "";
+    $("waBtn").textContent = w.linked ? "✓ WhatsApp vinculado " + w.phone + " (tocar para desvincular)" : "Vincular WhatsApp";
+    $("waBtn").hidden = $("waTxt").hidden = !w.ready && !w.linked;
+  } catch { $("waBtn").hidden = $("waTxt").hidden = true; }
+}
+$("waBtn").addEventListener("click", async () => {
+  const m = $("mWa"); say(m, "");
+  try {
+    if ($("waBtn").dataset.on) { await apiCall("/wa", { method: "DELETE" }); await refreshWa(); return say(m, "Se desvinculó tu WhatsApp.", true); }
+    const { code, number } = await apiCall("/wa/link", { method: "POST" });
+    const n = String(number || "").replace(/\D/g, "");
+    m.innerHTML = 'Manda este código por WhatsApp a Cami: <b>' + code + '</b><br><a href="https://wa.me/' + n + '?text=' + encodeURIComponent(code) + '" target="_blank" rel="noopener">Abrir WhatsApp con el código</a> (vence en 30 minutos).';
+    m.hidden = false; m.classList.add("ok");
+  } catch { say(m, "No se pudo vincular ahora. Prueba en un rato."); }
+});
 let crmDone = false;
 async function finishCrm() {
   if (crmDone) return;
@@ -567,6 +589,7 @@ onAuthStateChanged(auth, (user) => {
     $("hello").textContent = "¡Hola, " + ((user.displayName || "").split(" ")[0] || "bienvenida") + "!";
     if (mcpPend()) showMcp(); else window.__go?.("home");
     finishCrm().then(refreshCrm);
+    refreshWa();
   } else if (!document.getElementById("home").hidden) window.__go?.("welcome");
 });
 </script>

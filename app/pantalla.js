@@ -34,6 +34,7 @@ export async function cargarPendientes(apiCall) {
     for (const it of items) {
       const cv = Object.fromEntries((it.column_values || []).map((v) => [v.id, v]));
       if (DONE.test(it.group?.title || "") || estados.some((c) => DONE.test(cv[c.id]?.text || ""))) continue;
+      if (/^(agregar elemento|nuevo elemento|new item|elemento|item|sin nombre)$/i.test((it.name || "").trim())) continue; // filas vacías de monday
       const vencido = b.columns.some((c) => c.type === "date" && DUE.test(c.title) && (cv[c.id]?.text || "9999").slice(0, 10) < hoy);
       const campos = (it.column_values || [])
         .filter((v) => v.text && !["subtasks", "board_relation", "mirror", "file", "doc", "button", "link"].includes(v.type) && v.text.length < 160)
