@@ -66,6 +66,12 @@ input { height: 50px; border-radius: 12px; border: 2px solid var(--line); backgr
 .pasos { display: grid; gap: 8px; padding: 14px; border: 1px solid var(--line); border-radius: 16px; background: var(--card); text-align: left; }
 .pasos[hidden] { display: none; }
 #pNext { margin-top: 4px; }
+/* Inicio en 3 pantallas: mientras dura, solo se ve el paso actual. */
+#home .wz-s1, #home .wz-s2, #home .wz-s3 { display: none; }
+#home.wiz .body > :not(.wz) { display: none !important; }
+#home.wiz[data-paso="1"] .wz-s1, #home.wiz[data-paso="2"] .wz-s2, #home.wiz[data-paso="3"] .wz-s3 { display: grid; }
+.wz-nav { display: grid; grid-template-columns: 1fr 2fr; gap: 8px; }
+.wz-in { font: inherit; padding: 12px; border-radius: 12px; border: 1px solid var(--line); background: var(--bg); color: var(--ink); }
 .con3 { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
 .con { display: grid; justify-items: center; gap: 4px; padding: 12px 6px; border-radius: 12px; border: 1px solid var(--line); background: var(--bg); color: var(--ink); font: inherit; cursor: pointer; text-align: center; min-width: 0; }
 .con .ci { font-size: 22px; line-height: 1; }
@@ -232,8 +238,9 @@ h2 { margin: 0; font-size: 22px; }
     <h2 id="hello">¡Bienvenida!</h2>
   </header>
   <div class="body">
-    <div class="pasos" id="pasos">
-      <b id="pTit">Conecta a tu asistente</b>
+    <div class="pasos wz wz-s1" id="pasos">
+      <b id="pTit">Paso 1 de 3: conecta a tu asistente</b>
+      <p class="muted" style="margin:0;text-align:left">Toca cada cuadro para darle a tu asistente lo que necesita. Puedes hacerlo ahora o después.</p>
       <div class="con3">
         <button type="button" class="con" id="pWa"><span class="ci">💬</span><span class="cn">WhatsApp</span><span class="cs">Vincular</span></button>
         <button type="button" class="con" id="pCrm"><span class="ci">📊</span><span class="cn">Tu CRM</span><span class="cs">Conectar</span></button>
@@ -241,11 +248,24 @@ h2 { margin: 0; font-size: 22px; }
       </div>
       <button class="btn call-btn" type="button" id="pNext">Siguiente</button>
     </div>
+    <div class="pasos wz wz-s2" id="wz2">
+      <b>Paso 2 de 3: tus botones de acceso rápido</b>
+      <p class="muted" style="margin:0;text-align:left">Escribe lo que más le pedirías a tu asistente (hasta 6). Te quedan a un toque en el inicio.</p>
+      <div id="wzList" class="at-list"></div>
+      <button class="btn ghost" type="button" id="wzAdd">+ Agregar botón</button>
+      <div class="wz-nav"><button class="btn ghost" type="button" data-wz="1">Atrás</button><button class="btn call-btn" type="button" data-wz="3">Siguiente</button></div>
+    </div>
+    <div class="pasos wz wz-s3" id="wz3">
+      <b>Paso 3 de 3: ponle nombre a tu asistente</b>
+      <p class="muted" style="margin:0;text-align:left">Así te va a contestar y así la vas a llamar.</p>
+      <input id="wzName" class="wz-in" maxlength="30" placeholder="Por ejemplo: Cami">
+      <div class="wz-nav"><button class="btn ghost" type="button" data-wz="2">Atrás</button><button class="btn call-btn" type="button" id="wzOk">Listo, entrar</button></div>
+      <p class="msg" id="mWz" hidden></p>
+    </div>
     <div class="atajos" id="atajos" aria-label="Accesos rápidos" hidden></div>
     <button class="btn ghost" type="button" id="chatBtn">Escribirle a tu asistente</button>
     <button class="link-btn" type="button" id="atEdit">Editar botones y nombre</button>
     <div class="at-edit" id="atPanel" hidden>
-      <b id="atTit" hidden>Paso 2: elige los botones que quieres tener a mano</b>
       <label class="at-l">Nombre de tu asistente <input id="atName" maxlength="30" placeholder="Por ejemplo: Cami"></label>
       <p class="muted" style="text-align:left;margin:0">Tus botones (hasta 6). Escribe lo que le pedirías a tu asistente.</p>
       <div id="atList" class="at-list"></div>
@@ -258,11 +278,11 @@ h2 { margin: 0; font-size: 22px; }
     <p class="msg" id="mCall" hidden></p>
     <p class="muted" style="text-align:left">Conecta tu CRM para que tu asistente vea tus clientes y ventas. Funciona con monday, y pronto con otros.</p>
     <button class="btn ghost" type="button" id="crmBtn">Conectar mi CRM (monday)</button>
-    <p class="msg" id="mCrm" hidden></p>
+    <p class="msg wz" id="mCrm" hidden></p>
     <button class="btn ghost" type="button" id="fuBtn">Lo que sabe tu asistente</button>
     <p class="muted" style="text-align:left" id="waTxt" hidden>Habla con Cami también por WhatsApp: recordatorios y respuestas rápidas sobre tus pendientes.</p>
     <button class="btn ghost" type="button" id="waBtn" hidden>Vincular WhatsApp</button>
-    <p class="msg" id="mWa" hidden></p>
+    <p class="msg wz" id="mWa" hidden></p>
     <button class="btn ghost" type="button" id="logout">Cerrar sesión</button>
   </div>
 </section>
@@ -656,20 +676,33 @@ async function pintarPasos() {
   [["pWa", wa, "Vincular", "✓ Vinculado"], ["pCrm", crm, "Conectar", "✓ Conectado"], ["pDocs", tieneDocs, "Excel, PDF, Drive…", "✓ Subidos"]].forEach(([id, ok, no, si]) => {
     $(id).classList.toggle("ok", ok); $(id).querySelector(".cs").textContent = ok ? si : no;
   });
-  $("pTit").textContent = "Paso 1: conecta a tu asistente";
-  // Las 3 conexiones salen al principio; con «Siguiente» se pasa a elegir los botones. Después ya no se muestran.
+  // Inicio en 3 pantallas (conexiones → botones → nombre). Al terminar se entra a la app con sus botones.
   let hecho = false;
-  try { hecho = hecho || localStorage.getItem("pz_inicio_ok") === "1"; } catch {}
-  $("pasos").hidden = hecho;
+  try { hecho = localStorage.getItem("pz_inicio_ok") === "1"; } catch {}
+  $("home").classList.toggle("wiz", !hecho);
+  if (!hecho && !$("home").dataset.paso) irPaso(1);
   $("atajos").hidden = !fuente;
 }
 $("pWa").addEventListener("click", () => { $("waBtn").scrollIntoView({ behavior: "smooth", block: "center" }); if (!$("waBtn").dataset.on) $("waBtn").click(); });
 $("pCrm").addEventListener("click", () => { if ($("crmBtn").dataset.on) $("fuBtn").click(); else { $("crmBtn").scrollIntoView({ behavior: "smooth", block: "center" }); $("crmBtn").click(); } });
-$("pNext").addEventListener("click", () => {
-  $("pasos").hidden = true;
-  if ($("atPanel").hidden) $("atEdit").click();
-  $("atTit").hidden = false;
-  $("atPanel").scrollIntoView({ behavior: "smooth", block: "start" });
+function irPaso(n) {
+  $("home").dataset.paso = String(n);
+  if (n === 2 && !$("wzList").children.length) $("wzList").innerHTML = (perfilApp.atajos?.length ? perfilApp.atajos : ATAJOS_BASE).map(filaAt).join("");
+  if (n === 3 && !$("wzName").value) $("wzName").value = perfilApp.asistente || "";
+  scrollTo({ top: 0, behavior: "smooth" });
+}
+$("pNext").addEventListener("click", () => irPaso(2));
+$("home").addEventListener("click", (e) => { const b = e.target.closest("[data-wz]"); if (b) irPaso(Number(b.dataset.wz)); });
+$("wzList").addEventListener("click", (e) => { if (e.target.matches(".at-row button")) e.target.parentElement.remove(); });
+$("wzAdd").addEventListener("click", () => { if ($("wzList").children.length < 6) $("wzList").insertAdjacentHTML("beforeend", filaAt()); });
+$("wzOk").addEventListener("click", async () => {
+  const atajos = [...$("wzList").querySelectorAll("input")].map((i) => i.value.trim()).filter(Boolean).slice(0, 6);
+  try {
+    perfilApp = { ...perfilApp, ...(await apiCall("/perfil", { method: "POST", body: JSON.stringify({ asistente: $("wzName").value.trim(), atajos }) })) };
+    try { localStorage.setItem("pz_inicio_ok", "1"); } catch {}
+    $("home").classList.remove("wiz");
+    pintarAtajos(); pintarPasos(); scrollTo({ top: 0, behavior: "smooth" });
+  } catch { say($("mWz"), "No se pudo guardar. Prueba de nuevo."); }
 });
 $("pDocs").addEventListener("click", () => { $("fuBtn").click(); setTimeout(() => $("docIn").closest("label").scrollIntoView({ behavior: "smooth", block: "center" }), 300); });
 
@@ -708,8 +741,6 @@ $("atSave").addEventListener("click", async () => {
   const atajos = [...$("atList").querySelectorAll("input")].map((i) => i.value.trim()).filter(Boolean).slice(0, 6);
   try {
     perfilApp = { ...perfilApp, ...(await apiCall("/perfil", { method: "POST", body: JSON.stringify({ asistente: $("atName").value.trim(), atajos }) })) };
-    try { localStorage.setItem("pz_inicio_ok", "1"); } catch {}
-    $("atTit").hidden = true;
     pintarAtajos(); $("atPanel").hidden = true; pintarPasos();
   } catch { say($("mAt"), "No se pudo guardar. Prueba de nuevo."); }
 });
