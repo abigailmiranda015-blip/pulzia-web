@@ -185,6 +185,20 @@ h2 { margin: 0; font-size: 22px; }
   </div>
 </section>
 
+<!-- Conectar Cami con Claude (cuando la persona agrega el conector de Pulzia en su Claude) -->
+<section class="screen" id="claude" hidden>
+  <header class="top small">
+    <div class="desk small"><video src="office/trabaja-pp.mp4" poster="office/poster.jpg" autoplay muted loop playsinline aria-hidden="true"></video></div>
+    <h2>Conectar con Claude</h2>
+  </header>
+  <div class="body">
+    <p style="text-align:left"><b id="mcpWho">Claude</b> quiere usar tu cuenta de Pulzia para ver tus pendientes, buscar clientes y abrir fichas de tu CRM. Solo puede leer: no cambia nada.</p>
+    <button class="btn call-btn" type="button" id="mcpOk">Permitir</button>
+    <button class="btn ghost" type="button" id="mcpNo">Cancelar</button>
+    <p class="msg" id="mMcp" hidden></p>
+  </div>
+</section>
+
 <!-- 5. Llamada por internet con la asistente -->
 <section class="screen call" id="call" hidden>
   <div class="stage" id="cStage">
@@ -527,10 +541,31 @@ async function finishCrm() {
   catch (e) { say($("mCrm"), "No se pudo terminar la conexión: " + e.message); }
 }
 $("logout").addEventListener("click", () => signOut(auth));
+// Conector de Claude: guarda el pedido aunque la persona tenga que iniciar sesión primero.
+const mcpReq = new URLSearchParams(location.search).get("mcp");
+if (mcpReq) try { sessionStorage.setItem("pulzia_mcp", mcpReq); } catch {}
+const mcpPend = () => { try { return sessionStorage.getItem("pulzia_mcp"); } catch { return mcpReq; } };
+async function showMcp() {
+  const rid = mcpPend();
+  window.__go?.("claude");
+  try { const r = await fetch(API + "/oauth/info?req=" + rid).then((x) => x.json()); if (r.client) $("mcpWho").textContent = r.client; else say($("mMcp"), "La solicitud venció. Vuelve a conectar desde Claude."); } catch {}
+}
+$("mcpOk").addEventListener("click", async () => {
+  const m = $("mMcp"); say(m, "");
+  try {
+    const r = await fetch(API + "/oauth/approve", { method: "POST", headers: { "Content-Type": "application/json", Authorization: "Bearer " + (await auth.currentUser.getIdToken()) }, body: JSON.stringify({ req: mcpPend() }) });
+    const j = await r.json();
+    if (!r.ok) return say(m, j.error || "No se pudo conectar.");
+    try { sessionStorage.removeItem("pulzia_mcp"); } catch {}
+    say(m, "Listo, volviendo a Claude…", true);
+    location.href = j.redirect;
+  } catch { say(m, "No se pudo conectar. Prueba de nuevo."); }
+});
+$("mcpNo").addEventListener("click", () => { try { sessionStorage.removeItem("pulzia_mcp"); } catch {} history.replaceState(null, "", location.pathname); window.__go?.("home"); });
 onAuthStateChanged(auth, (user) => {
   if (user) {
     $("hello").textContent = "¡Hola, " + ((user.displayName || "").split(" ")[0] || "bienvenida") + "!";
-    window.__go?.("home");
+    if (mcpPend()) showMcp(); else window.__go?.("home");
     finishCrm().then(refreshCrm);
   } else if (!document.getElementById("home").hidden) window.__go?.("welcome");
 });
