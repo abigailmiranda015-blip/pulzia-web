@@ -65,6 +65,7 @@ input { height: 50px; border-radius: 12px; border: 2px solid var(--line); backgr
 .chat-in .btn { width: auto; padding: 0 16px; margin: 0; }
 .pasos { display: grid; gap: 8px; padding: 14px; border: 1px solid var(--line); border-radius: 16px; background: var(--card); text-align: left; }
 .pasos[hidden] { display: none; }
+#pNext { margin-top: 4px; }
 .con3 { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
 .con { display: grid; justify-items: center; gap: 4px; padding: 12px 6px; border-radius: 12px; border: 1px solid var(--line); background: var(--bg); color: var(--ink); font: inherit; cursor: pointer; text-align: center; min-width: 0; }
 .con .ci { font-size: 22px; line-height: 1; }
@@ -238,11 +239,13 @@ h2 { margin: 0; font-size: 22px; }
         <button type="button" class="con" id="pCrm"><span class="ci">📊</span><span class="cn">Tu CRM</span><span class="cs">Conectar</span></button>
         <button type="button" class="con" id="pDocs"><span class="ci">📁</span><span class="cn">Documentos</span><span class="cs">Excel, PDF, Drive…</span></button>
       </div>
+      <button class="btn call-btn" type="button" id="pNext">Siguiente</button>
     </div>
     <div class="atajos" id="atajos" aria-label="Accesos rápidos" hidden></div>
     <button class="btn ghost" type="button" id="chatBtn">Escribirle a tu asistente</button>
     <button class="link-btn" type="button" id="atEdit">Editar botones y nombre</button>
     <div class="at-edit" id="atPanel" hidden>
+      <b id="atTit" hidden>Paso 2: elige los botones que quieres tener a mano</b>
       <label class="at-l">Nombre de tu asistente <input id="atName" maxlength="30" placeholder="Por ejemplo: Cami"></label>
       <p class="muted" style="text-align:left;margin:0">Tus botones (hasta 6). Escribe lo que le pedirías a tu asistente.</p>
       <div id="atList" class="at-list"></div>
@@ -653,11 +656,21 @@ async function pintarPasos() {
   [["pWa", wa, "Vincular", "✓ Vinculado"], ["pCrm", crm, "Conectar", "✓ Conectado"], ["pDocs", tieneDocs, "Excel, PDF, Drive…", "✓ Subidos"]].forEach(([id, ok, no, si]) => {
     $(id).classList.toggle("ok", ok); $(id).querySelector(".cs").textContent = ok ? si : no;
   });
-  $("pTit").textContent = wa && crm && tieneDocs ? "Tus conexiones" : "Conecta a tu asistente";
+  $("pTit").textContent = "Paso 1: conecta a tu asistente";
+  // Las 3 conexiones salen al principio; con «Siguiente» se pasa a elegir los botones. Después ya no se muestran.
+  let hecho = false;
+  try { hecho = hecho || localStorage.getItem("pz_inicio_ok") === "1"; } catch {}
+  $("pasos").hidden = hecho;
   $("atajos").hidden = !fuente;
 }
 $("pWa").addEventListener("click", () => { $("waBtn").scrollIntoView({ behavior: "smooth", block: "center" }); if (!$("waBtn").dataset.on) $("waBtn").click(); });
 $("pCrm").addEventListener("click", () => { if ($("crmBtn").dataset.on) $("fuBtn").click(); else { $("crmBtn").scrollIntoView({ behavior: "smooth", block: "center" }); $("crmBtn").click(); } });
+$("pNext").addEventListener("click", () => {
+  $("pasos").hidden = true;
+  if ($("atPanel").hidden) $("atEdit").click();
+  $("atTit").hidden = false;
+  $("atPanel").scrollIntoView({ behavior: "smooth", block: "start" });
+});
 $("pDocs").addEventListener("click", () => { $("fuBtn").click(); setTimeout(() => $("docIn").closest("label").scrollIntoView({ behavior: "smooth", block: "center" }), 300); });
 
 // Botones de acceso rápido y nombre del asistente: cada usuario los elige (se guardan en su cuenta).
@@ -695,6 +708,8 @@ $("atSave").addEventListener("click", async () => {
   const atajos = [...$("atList").querySelectorAll("input")].map((i) => i.value.trim()).filter(Boolean).slice(0, 6);
   try {
     perfilApp = { ...perfilApp, ...(await apiCall("/perfil", { method: "POST", body: JSON.stringify({ asistente: $("atName").value.trim(), atajos }) })) };
+    try { localStorage.setItem("pz_inicio_ok", "1"); } catch {}
+    $("atTit").hidden = true;
     pintarAtajos(); $("atPanel").hidden = true; pintarPasos();
   } catch { say($("mAt"), "No se pudo guardar. Prueba de nuevo."); }
 });
