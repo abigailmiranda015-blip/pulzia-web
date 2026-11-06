@@ -48,6 +48,19 @@ input { height: 50px; border-radius: 12px; border: 2px solid var(--line); backgr
 .muted a, .link { color: var(--accent); font-weight: 700; background: none; border: 0; padding: 0; cursor: pointer; font-size: inherit; }
 .msg { margin: 0; padding: 10px 12px; border-radius: 12px; font-size: 14px; background: #fde4e1; color: #b42318; }
 .msg.ok { background: #e1f3e8; color: #1e7f4e; }
+#chat { display: flex; flex-direction: column; min-height: 100dvh; padding: 0; }
+#chat[hidden] { display: none; }
+.chat-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 12px 16px; background: var(--brand); color: #fff; position: sticky; top: 0; }
+.chat-top .link-btn { color: #fff; }
+.chat-log { flex: 1; display: flex; flex-direction: column; gap: 8px; padding: 16px; overflow-y: auto; background: var(--bg); }
+.chat-m { max-width: 82%; padding: 10px 12px; border-radius: 14px; white-space: pre-wrap; overflow-wrap: anywhere; text-align: left; line-height: 1.4; }
+.chat-m.yo { align-self: flex-end; background: #d8f1ea; color: var(--ink); }
+.chat-m.ella { align-self: flex-start; background: var(--card); border: 1px solid var(--line); color: var(--ink); }
+.chat-m.est { align-self: flex-start; color: var(--muted); font-style: italic; background: none; padding: 4px 2px; }
+.chat-f { display: block; margin-top: 8px; padding: 8px 10px; border-radius: 10px; border: 1px solid var(--line); background: var(--bg); color: var(--accent); font: inherit; cursor: pointer; text-align: left; }
+.chat-in { display: flex; gap: 8px; padding: 10px 16px calc(10px + env(safe-area-inset-bottom)); background: var(--card); border-top: 1px solid var(--line); position: sticky; bottom: 0; }
+.chat-in input { flex: 1; min-width: 0; font: inherit; padding: 12px; border: 1px solid var(--line); border-radius: 12px; }
+.chat-in .btn { width: auto; padding: 0 16px; margin: 0; }
 .atajos { display: flex; flex-wrap: wrap; gap: 8px; }
 .atajos button { flex: 1 1 calc(50% - 8px); min-width: 0; padding: 12px; border-radius: 14px; border: 1px solid var(--line); background: var(--card); color: var(--ink); font: inherit; font-weight: 600; text-align: left; cursor: pointer; }
 .atajos button:active { background: #e8f3f0; }
@@ -203,6 +216,7 @@ h2 { margin: 0; font-size: 22px; }
   </header>
   <div class="body">
     <div class="atajos" id="atajos" aria-label="Accesos rápidos"></div>
+    <button class="btn ghost" type="button" id="chatBtn">Escribirle a tu asistente</button>
     <button class="link-btn" type="button" id="atEdit">Editar botones y nombre</button>
     <div class="at-edit" id="atPanel" hidden>
       <label class="at-l">Nombre de tu asistente <input id="atName" maxlength="30" placeholder="Por ejemplo: Cami"></label>
@@ -224,6 +238,13 @@ h2 { margin: 0; font-size: 22px; }
     <p class="msg" id="mWa" hidden></p>
     <button class="btn ghost" type="button" id="logout">Cerrar sesión</button>
   </div>
+</section>
+
+<!-- Chat por escrito con el asistente (misma conversación que en WhatsApp) -->
+<section class="screen" id="chat" hidden>
+  <div class="chat-top"><button class="link-btn" type="button" id="chatBack">← Volver</button><b id="chatWho">Tu asistente</b><span></span></div>
+  <div class="chat-log" id="chatLog" aria-live="polite"></div>
+  <form class="chat-in" id="chatForm"><input id="chatTxt" autocomplete="off" maxlength="2000" placeholder="Escribe un mensaje…"><button class="btn call-btn" type="submit">Enviar</button></form>
 </section>
 
 <!-- Lo que sabe tu asistente: tableros y columnas del CRM que puede ver -->
@@ -596,6 +617,7 @@ function pintarAtajos() {
   const lista = perfilApp.atajos?.length ? perfilApp.atajos : ATAJOS_BASE;
   $("atajos").innerHTML = lista.map((t, i) => `<button type="button" data-i="${i}">${escH(t)}</button>`).join("");
   $("callTxt").textContent = "Llamar a " + nombreAsis();
+  $("chatBtn").textContent = "Escribirle a " + nombreAsis();
   $("cWho").textContent = perfilApp.asistente || "Tu asistente";
   if (perfilApp.usuario) $("hello").textContent = "¡Hola, " + perfilApp.usuario + "!";
 }
@@ -624,6 +646,49 @@ $("atSave").addEventListener("click", async () => {
     perfilApp = { ...perfilApp, ...(await apiCall("/perfil", { method: "POST", body: JSON.stringify({ asistente: $("atName").value.trim(), atajos }) })) };
     pintarAtajos(); $("atPanel").hidden = true;
   } catch { say($("mAt"), "No se pudo guardar. Prueba de nuevo."); }
+});
+
+// Chat por escrito: mismo asistente y misma conversación que por WhatsApp.
+function burbuja(quien, texto, archivos = []) {
+  const d = document.createElement("div"); d.className = "chat-m " + quien; d.textContent = texto;
+  for (const a of archivos) { const b = document.createElement("button"); b.type = "button"; b.className = "chat-f"; b.textContent = "📎 " + a.name; b.dataset.id = a.id; b.dataset.name = a.name; d.append(b); }
+  $("chatLog").append(d); $("chatLog").scrollTop = $("chatLog").scrollHeight; return d;
+}
+async function abrirChat() {
+  window.__go?.("chat");
+  $("chatWho").textContent = perfilApp.asistente || "Tu asistente";
+  $("chatLog").innerHTML = "";
+  try { const { history } = await apiCall("/chat"); history.forEach((h) => burbuja(h.role === "user" ? "yo" : "ella", h.content)); } catch {}
+  if (!$("chatLog").children.length) burbuja("ella", "Hola, soy " + (perfilApp.asistente || "tu asistente") + ". ¿En qué te ayudo?");
+  $("chatTxt").focus();
+}
+$("chatBtn").addEventListener("click", abrirChat);
+$("chatBack").addEventListener("click", () => window.__go?.("home"));
+$("chatForm").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const t = $("chatTxt").value.trim(); if (!t) return;
+  $("chatTxt").value = ""; burbuja("yo", t);
+  const est = burbuja("est", "Escribiendo…");
+  try {
+    const { id } = await apiCall("/chat", { method: "POST", body: JSON.stringify({ text: t }) });
+    for (let i = 0; i < 400; i++) {
+      await new Promise((r) => setTimeout(r, 1200));
+      const r = await apiCall("/chat/" + id).catch(() => ({}));
+      if (r.status === "listo") { est.remove(); burbuja("ella", r.reply, r.archivos || []); return; }
+      if (r.status === "error") throw new Error();
+      est.textContent = r.status === "encendiendo" ? "Encendiéndose… la primera respuesta puede tardar un poco." : "Escribiendo…";
+    }
+    throw new Error();
+  } catch { est.textContent = "No pude responder ahora. Intenta de nuevo en un momento."; }
+});
+$("chatLog").addEventListener("click", async (e) => {
+  const b = e.target.closest(".chat-f"); if (!b) return;
+  try {
+    const r = await fetch(API + "/docs/" + b.dataset.id + "/archivo", { headers: { Authorization: "Bearer " + (await auth.currentUser.getIdToken()) } });
+    const url = URL.createObjectURL(await r.blob());
+    const a = document.createElement("a"); a.href = url; a.download = b.dataset.name; a.target = "_blank"; document.body.append(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 60000);
+  } catch {}
 });
 
 // Lo que sabe tu asistente: el usuario elige tableros y esconde columnas. El servidor lo aplica en la tele, WhatsApp y Claude.
