@@ -48,6 +48,17 @@ input { height: 50px; border-radius: 12px; border: 2px solid var(--line); backgr
 .muted a, .link { color: var(--accent); font-weight: 700; background: none; border: 0; padding: 0; cursor: pointer; font-size: inherit; }
 .msg { margin: 0; padding: 10px 12px; border-radius: 12px; font-size: 14px; background: #fde4e1; color: #b42318; }
 .msg.ok { background: #e1f3e8; color: #1e7f4e; }
+.atajos { display: flex; flex-wrap: wrap; gap: 8px; }
+.atajos button { flex: 1 1 calc(50% - 8px); min-width: 0; padding: 12px; border-radius: 14px; border: 1px solid var(--line); background: var(--card); color: var(--ink); font: inherit; font-weight: 600; text-align: left; cursor: pointer; }
+.atajos button:active { background: #e8f3f0; }
+.link-btn { background: none; border: 0; color: var(--accent); font: inherit; font-size: 14px; padding: 2px; cursor: pointer; align-self: flex-end; }
+.at-edit { display: grid; gap: 8px; padding: 12px; border: 1px solid var(--line); border-radius: 14px; background: var(--card); }
+.at-l { display: grid; gap: 4px; text-align: left; font-weight: 600; font-size: 14px; }
+.at-l input, .at-row input { font: inherit; padding: 10px; border: 1px solid var(--line); border-radius: 10px; min-width: 0; }
+.at-list { display: grid; gap: 6px; }
+.at-row { display: flex; gap: 6px; }
+.at-row input { flex: 1; }
+.at-row button { border: 1px solid var(--line); background: none; border-radius: 10px; width: 40px; font-size: 18px; cursor: pointer; }
 .fu-list { display: grid; gap: 8px; text-align: left; }
 .fu-b { border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; background: var(--card); }
 .fu-b > label { display: flex; gap: 10px; align-items: center; font-weight: 600; }
@@ -184,7 +195,17 @@ h2 { margin: 0; font-size: 22px; }
     <h2 id="hello">¡Bienvenida!</h2>
   </header>
   <div class="body">
-    <button class="btn call-btn" type="button" id="callBtn"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M6.6 10.8a15.1 15.1 0 0 0 6.6 6.6l2.2-2.2a1 1 0 0 1 1-.25 11.4 11.4 0 0 0 3.6.57 1 1 0 0 1 1 1V20a1 1 0 0 1-1 1A17 17 0 0 1 3 4a1 1 0 0 1 1-1h3.5a1 1 0 0 1 1 1c0 1.25.2 2.45.57 3.57a1 1 0 0 1-.25 1z"/></svg>Llamar a Camila</button>
+    <div class="atajos" id="atajos" aria-label="Accesos rápidos"></div>
+    <button class="link-btn" type="button" id="atEdit">Editar botones y nombre</button>
+    <div class="at-edit" id="atPanel" hidden>
+      <label class="at-l">Nombre de tu asistente <input id="atName" maxlength="30" placeholder="Por ejemplo: Cami"></label>
+      <p class="muted" style="text-align:left;margin:0">Tus botones (hasta 6). Escribe lo que le pedirías a tu asistente.</p>
+      <div id="atList" class="at-list"></div>
+      <button class="btn ghost" type="button" id="atAdd">+ Agregar botón</button>
+      <button class="btn call-btn" type="button" id="atSave">Guardar</button>
+      <p class="msg" id="mAt" hidden></p>
+    </div>
+    <button class="btn call-btn" type="button" id="callBtn"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M6.6 10.8a15.1 15.1 0 0 0 6.6 6.6l2.2-2.2a1 1 0 0 1 1-.25 11.4 11.4 0 0 0 3.6.57 1 1 0 0 1 1 1V20a1 1 0 0 1-1 1A17 17 0 0 1 3 4a1 1 0 0 1 1-1h3.5a1 1 0 0 1 1 1c0 1.25.2 2.45.57 3.57a1 1 0 0 1-.25 1z"/></svg><span id="callTxt">Llamar a tu asistente</span></button>
     <p class="muted">Llamada por internet. Necesita el micrófono.</p>
     <p class="msg" id="mCall" hidden></p>
     <p class="muted" style="text-align:left">Conecta tu CRM para que tu asistente vea tus clientes y ventas. Funciona con monday, y pronto con otros.</p>
@@ -232,7 +253,7 @@ h2 { margin: 0; font-size: 22px; }
 <section class="screen call" id="call" hidden>
   <div class="stage" id="cStage">
     <div class="scene" id="cScene"><div class="tv" id="cTv" role="button" tabindex="0" aria-label="Ver la lista de pendientes"></div></div>
-    <div class="hud"><div class="who">Camila</div><div class="state"><span class="dot" id="cDot"></span><span id="cState">Conectando…</span> · <span id="cTime">0:00</span></div></div>
+    <div class="hud"><div class="who" id="cWho">Tu asistente</div><div class="state"><span class="dot" id="cDot"></span><span id="cState">Conectando…</span> · <span id="cTime">0:00</span></div></div>
     <div class="ficha" id="cFicha" hidden aria-live="polite"></div>
   </div>
   <div class="bar">
@@ -405,7 +426,7 @@ const fmt = () => { const s = Math.floor((Date.now() - t0) / 1000); $("cTime").t
 const showTalk = (talk) => {
   office?.speaking(talk);
   $("cDot").classList.toggle("talk", talk);
-  $("cState").textContent = talk ? "Camila está hablando" : "Te escucho";
+  $("cState").textContent = talk ? nombreAsis().replace(/^tu /, "Tu ") + " está hablando" : "Te escucho";
 };
 function cerrarPantalla() {
   tv.dataset.on = ""; tv.classList.remove("on");
@@ -462,7 +483,7 @@ $("callBtn").addEventListener("click", async () => {
   const user = auth.currentUser;
   // Pide el micrófono primero, con un mensaje claro si no lo dan.
   try { (await navigator.mediaDevices.getUserMedia({ audio: true })).getTracks().forEach((t) => t.stop()); }
-  catch { return say(m, "Para llamar a Camila tienes que permitir el micrófono. Revisa los permisos de tu navegador y vuelve a intentarlo."); }
+  catch { return say(m, "Para llamar a " + nombreAsis() + " tienes que permitir el micrófono. Revisa los permisos de tu navegador y vuelve a intentarlo."); }
   window.__go?.("call");
   $("cTime").textContent = "0:00"; $("cState").textContent = "Conectando…";
   $("cMute").setAttribute("aria-pressed", "false");
@@ -497,11 +518,12 @@ $("callBtn").addEventListener("click", async () => {
   conv = own.startOwnVoiceCall({
     getToken: () => user.getIdToken(),
     crm: window.__crm || "ninguno",
+    pedido: (() => { const x = window.__pedido; window.__pedido = null; return x; })(),
     getContexto: async () => (await pendientes())?.texto || "",
     onHeard: alEscuchar,
     onAccion: alAccion,
     onMode: (mode) => {
-      if (mode === "connected") { t0 = Date.now(); tick = setInterval(fmt, 1000); $("cState").textContent = "Encendiendo a Camila…"; return; }
+      if (mode === "connected") { t0 = Date.now(); tick = setInterval(fmt, 1000); $("cState").textContent = "Encendiendo a " + nombreAsis() + "…"; return; }
       if (mode === "thinking") { $("cState").textContent = "Pensando…"; return; }
       showTalk(mode === "speaking");
     },
@@ -554,6 +576,44 @@ $("crmBtn").addEventListener("click", async () => {
     location.href = url;
   } catch { say(m, "No se pudo conectar. Prueba de nuevo en un momento."); }
 });
+// Botones de acceso rápido y nombre del asistente: cada usuario los elige (se guardan en su cuenta).
+let perfilApp = { asistente: "", atajos: [] };
+const ATAJOS_BASE = ["¿Cómo vamos hoy?", "¿A quién tengo que llamar hoy?", "¿Qué tengo vencido?", "Muéstrame mis pendientes por etapa"];
+const nombreAsis = () => perfilApp.asistente || "tu asistente";
+function pintarAtajos() {
+  const lista = perfilApp.atajos?.length ? perfilApp.atajos : ATAJOS_BASE;
+  $("atajos").innerHTML = lista.map((t, i) => `<button type="button" data-i="${i}">${escH(t)}</button>`).join("");
+  $("callTxt").textContent = "Llamar a " + nombreAsis();
+  $("cWho").textContent = perfilApp.asistente || "Tu asistente";
+  if (perfilApp.usuario) $("hello").textContent = "¡Hola, " + perfilApp.usuario + "!";
+}
+async function refreshPerfil() {
+  try { perfilApp = { asistente: "", atajos: [], ...(await apiCall("/perfil")) }; } catch {}
+  pintarAtajos();
+}
+$("atajos").addEventListener("click", (e) => {
+  const b = e.target.closest("button"); if (!b) return;
+  const lista = perfilApp.atajos?.length ? perfilApp.atajos : ATAJOS_BASE;
+  window.__pedido = lista[Number(b.dataset.i)];
+  $("callBtn").click();
+});
+const filaAt = (t = "") => `<div class="at-row"><input maxlength="80" value="${escH(t)}" placeholder="Ej.: ¿Qué se me está acabando?"><button type="button" aria-label="Quitar">×</button></div>`;
+$("atEdit").addEventListener("click", () => {
+  const p = $("atPanel"); p.hidden = !p.hidden; if (p.hidden) return;
+  $("atName").value = perfilApp.asistente || "";
+  $("atList").innerHTML = (perfilApp.atajos?.length ? perfilApp.atajos : ATAJOS_BASE).map(filaAt).join("");
+  say($("mAt"), "");
+});
+$("atList").addEventListener("click", (e) => { if (e.target.matches(".at-row button")) e.target.parentElement.remove(); });
+$("atAdd").addEventListener("click", () => { if ($("atList").children.length < 6) $("atList").insertAdjacentHTML("beforeend", filaAt()); });
+$("atSave").addEventListener("click", async () => {
+  const atajos = [...$("atList").querySelectorAll("input")].map((i) => i.value.trim()).filter(Boolean).slice(0, 6);
+  try {
+    perfilApp = { ...perfilApp, ...(await apiCall("/perfil", { method: "POST", body: JSON.stringify({ asistente: $("atName").value.trim(), atajos }) })) };
+    pintarAtajos(); $("atPanel").hidden = true;
+  } catch { say($("mAt"), "No se pudo guardar. Prueba de nuevo."); }
+});
+
 // Lo que sabe tu asistente: el usuario elige tableros y esconde columnas. El servidor lo aplica en la tele, WhatsApp y Claude.
 let fuData = null;
 const escH = (t) => String(t ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
@@ -653,6 +713,7 @@ onAuthStateChanged(auth, (user) => {
     if (mcpPend()) showMcp(); else window.__go?.("home");
     finishCrm().then(refreshCrm);
     refreshWa();
+    refreshPerfil();
   } else if (!document.getElementById("home").hidden) window.__go?.("welcome");
 });
 </script>

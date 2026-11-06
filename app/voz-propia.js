@@ -14,7 +14,7 @@ export async function voiceStatus(getToken) {
   }
 }
 
-export function startOwnVoiceCall({ getToken, crm = "ninguno", getContexto, onMode, onSubtitle, onHeard, onAccion, onError, onEnd }) {
+export function startOwnVoiceCall({ getToken, crm = "ninguno", pedido, getContexto, onMode, onSubtitle, onHeard, onAccion, onError, onEnd }) {
   let stopped = false, ctx, stream, analyser, rec, chunks = [], speakingSince = 0, silentSince = 0, recording = false;
   let job = null, queue = [], playing = null, muted = false;
   const history = [];
@@ -117,7 +117,9 @@ export function startOwnVoiceCall({ getToken, crm = "ninguno", getContexto, onMo
       ctx.createMediaStreamSource(stream).connect(analyser);
       onMode?.("connected");
       // Saludo inicial: se pide como texto para que Camila salude primero.
-      sendTextTurn("(La persona acaba de llamarte. Salúdala corto por su nombre y pregúntale en qué la ayudas.)");
+      // Si llamó desde un botón de acceso rápido, se responde eso de inmediato.
+      if (pedido) { history.push({ role: "user", content: pedido }); sendTextTurn("(La persona te llamó desde un botón de acceso rápido y te pide: «" + pedido + "». Salúdala muy corto por su nombre y respóndele eso.)"); }
+      else sendTextTurn("(La persona acaba de llamarte. Salúdala corto por su nombre y pregúntale en qué la ayudas.)");
       loop();
     } catch {
       onError?.("No pude usar el micrófono.");
