@@ -39,6 +39,8 @@ export function startOwnVoiceCall({ getToken, crm = "ninguno", pedido, getContex
     return j;
   };
   const camilaTalking = () => !!playing || queue.length > 0;
+  // Despierta el servidor de voz apenas se abre la llamada, para que el arranque en frío (~50 s) pase mientras la persona saluda.
+  api("/voice/warm", { method: "POST", body: "{}" }).catch(() => {});
 
   const a = reproductor || unlockAudio();
   // Si el navegador igual bloquea el sonido, el próximo toque en la pantalla lo vuelve a intentar.
