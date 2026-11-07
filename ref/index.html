@@ -1,0 +1,8 @@
+<!doctype html><meta charset="utf-8"><meta name="robots" content="noindex"><title>ref</title>
+<body style="margin:0;background:#222">
+<img id="a" src="puli-ref-pie.jpg" style="height:45vh"><img id="b" src="puli-ref-escritorio.jpg" style="height:45vh">
+<script>
+async function copiar(id){const i=document.getElementById(id);const c=document.createElement('canvas');c.width=i.naturalWidth;c.height=i.naturalHeight;c.getContext('2d').drawImage(i,0,0);const blob=await new Promise(r=>c.toBlob(r,'image/png'));await navigator.clipboard.write([new ClipboardItem({'image/png':blob})]);document.title='copiado '+id;}
+document.getElementById('a').onclick=()=>copiar('a').catch(e=>document.title='err '+e);
+document.getElementById('b').onclick=()=>copiar('b').catch(e=>document.title='err '+e);
+</script>
