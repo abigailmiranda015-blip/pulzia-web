@@ -5,6 +5,18 @@
 
 export const API = "https://pulzia-api.abigailmiranda015.workers.dev";
 
+// En celulares (sobre todo iPhone) el navegador solo deja sonar audio que se "desbloqueó" con un toque.
+// Por eso se usa un único reproductor, desbloqueado en el mismo toque de «Llamar», para toda la llamada.
+const SILENCIO = "data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAQB8AAIA+AAACABAAZGF0YQAAAAA=";
+let reproductor = null;
+export function unlockAudio() {
+  if (!reproductor) reproductor = new Audio();
+  reproductor.playsInline = true;
+  reproductor.src = SILENCIO;
+  reproductor.play().catch(() => {});
+  return reproductor;
+}
+
 export async function voiceStatus(getToken) {
   try {
     const r = await fetch(API + "/voice", { headers: { Authorization: "Bearer " + (await getToken()) } });
@@ -28,6 +40,12 @@ export function startOwnVoiceCall({ getToken, crm = "ninguno", pedido, getContex
   };
   const camilaTalking = () => !!playing || queue.length > 0;
 
+  const a = reproductor || unlockAudio();
+  // Si el navegador igual bloquea el sonido, el próximo toque en la pantalla lo vuelve a intentar.
+  let bloqueado = false;
+  const reintentar = () => { if (bloqueado && playing) { bloqueado = false; playing.play().catch(() => {}); } };
+  document.addEventListener("pointerdown", reintentar);
+
   function stopCamila() {
     queue = [];
     if (playing) { try { playing.pause(); } catch {} playing = null; }
@@ -38,12 +56,16 @@ export function startOwnVoiceCall({ getToken, crm = "ninguno", pedido, getContex
   function playNext() {
     if (playing || !queue.length) { if (!playing && !queue.length && !job) onMode?.("listening"); return; }
     const part = queue.shift();
-    const a = new Audio("data:audio/wav;base64," + part.wav_b64);
+    a.src = "data:audio/wav;base64," + part.wav_b64;
     playing = a;
     onMode?.("speaking");
     onSubtitle?.(part.text);
-    a.onended = a.onerror = () => { if (playing === a) playing = null; playNext(); };
-    a.play().catch(() => { playing = null; playNext(); });
+    a.onended = () => { if (playing === a) playing = null; playNext(); };
+    a.onerror = () => { if (playing === a) playing = null; playNext(); };
+    a.play().catch((e) => {
+      if (e?.name === "NotAllowedError") { bloqueado = true; onError?.("Toca la pantalla para escuchar a tu asistente."); }
+      else { playing = null; playNext(); }
+    });
   }
 
   async function sendTurn(blob) {
@@ -154,6 +176,7 @@ export function startOwnVoiceCall({ getToken, crm = "ninguno", pedido, getContex
     if (stopped) return;
     stopped = true;
     stopCamila();
+    document.removeEventListener("pointerdown", reintentar);
     try { rec?.state === "recording" && rec.stop(); } catch {}
     stream?.getTracks().forEach((t) => t.stop());
     ctx?.close().catch(() => {});

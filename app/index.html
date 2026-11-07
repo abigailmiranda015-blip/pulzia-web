@@ -574,8 +574,13 @@ const endCall = async () => {
   cerrarPantalla(); office?.stop(); tvMode = false; stage.classList.remove("tvmode");
   window.__go?.("home");
 };
+// El módulo de voz se carga de antemano para poder desbloquear el sonido en el mismo toque.
+let vozMod = null;
+import("./voz-propia.js").then((m) => (vozMod = m)).catch(() => {});
 $("callBtn").addEventListener("click", async () => {
   const m = $("mCall"); say(m, "");
+  // El sonido se desbloquea en este mismo toque (si no, el iPhone no deja que la asistente se escuche).
+  try { vozMod?.unlockAudio(); } catch {}
   const user = auth.currentUser;
   // Pide el micrófono primero, con un mensaje claro si no lo dan.
   try { (await navigator.mediaDevices.getUserMedia({ audio: true })).getTracks().forEach((t) => t.stop()); }
