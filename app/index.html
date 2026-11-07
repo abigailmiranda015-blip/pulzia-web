@@ -63,6 +63,8 @@ input { height: 50px; border-radius: 12px; border: 2px solid var(--line); backgr
 .chat-in { display: flex; gap: 8px; padding: 10px 16px calc(10px + env(safe-area-inset-bottom)); background: var(--card); border-top: 1px solid var(--line); position: sticky; bottom: 0; }
 .chat-in input { flex: 1; min-width: 0; font: inherit; padding: 12px; border: 1px solid var(--line); border-radius: 12px; }
 .chat-in .btn { width: auto; padding: 0 16px; margin: 0; }
+.chat-in .chat-mic { background: var(--card); color: var(--ink, inherit); border: 1px solid var(--line); height: 58px; font-size: 20px; padding: 0 14px; }
+.chat-in .chat-mic.grabando { background: #d9534f; color: #fff; border-color: #d9534f; font-size: 15px; }
 .pasos { display: grid; gap: 8px; padding: 14px; border: 1px solid var(--line); border-radius: 16px; background: var(--card); text-align: left; }
 .pasos[hidden] { display: none; }
 #pNext { margin-top: 4px; }
@@ -296,7 +298,7 @@ h2 { margin: 0; font-size: 22px; }
 <section class="screen" id="chat" hidden>
   <div class="chat-top"><button class="link-btn" type="button" id="chatBack">← Volver</button><b id="chatWho">Tu asistente</b><span></span></div>
   <div class="chat-log" id="chatLog" aria-live="polite"></div>
-  <form class="chat-in" id="chatForm"><input id="chatTxt" autocomplete="off" maxlength="2000" placeholder="Escribe un mensaje…"><button class="btn call-btn" type="submit">Enviar</button></form>
+  <form class="chat-in" id="chatForm"><input id="chatTxt" autocomplete="off" maxlength="2000" placeholder="Escribe un mensaje…"><button class="btn chat-mic" id="chatMic" type="button" aria-label="Enviar una nota de voz" title="Nota de voz">🎤</button><button class="btn call-btn" type="submit">Enviar</button></form>
 </section>
 
 <!-- Lo que sabe tu asistente: tableros y columnas del CRM que puede ver -->
@@ -797,6 +799,65 @@ $("chatForm").addEventListener("submit", async (e) => {
     throw new Error();
   } catch { est.textContent = "No pude responder ahora. Intenta de nuevo en un momento."; }
 });
+// Nota de voz: toca el micrófono, habla y toca de nuevo para enviar. Responde por escrito y con su voz (servidor de voz propio).
+(() => {
+  const mic = $("chatMic");
+  let rec = null, chunks = [], stream = null, ocupado = false, reproductor = null;
+  const hist = () => [...$("chatLog").querySelectorAll(".chat-m.yo, .chat-m.ella")].slice(-8).map((n) => ({ role: n.classList.contains("yo") ? "user" : "assistant", content: n.textContent.slice(0, 600) }));
+  async function enviar(blob) {
+    ocupado = true; mic.disabled = true;
+    const est = burbuja("est", "Escuchándote…");
+    try {
+      const b64 = await new Promise((ok) => { const fr = new FileReader(); fr.onload = () => ok(String(fr.result).split(",")[1] || ""); fr.readAsDataURL(blob); });
+      const { id } = await apiCall("/voice/turn", { method: "POST", body: JSON.stringify({ audio_b64: b64, history: hist(), crm: window.__crm || "ninguno", contexto: (await pendientes())?.texto || undefined }) });
+      const cola = []; let sonando = false, heard = "", reply = "", yoB = null, ellaB = null;
+      const siguiente = () => {
+        if (sonando || !cola.length) return;
+        sonando = true; const p = cola.shift();
+        reproductor.src = "data:audio/wav;base64," + p.wav_b64;
+        reproductor.onended = reproductor.onerror = () => { sonando = false; siguiente(); };
+        reproductor.play().catch(() => { sonando = false; siguiente(); });
+      };
+      for (let i = 0; i < 250; i++) {
+        await new Promise((r) => setTimeout(r, i < 10 ? 300 : 600));
+        const s = await apiCall("/voice/stream/" + id).catch(() => ({}));
+        if (!s.items && !s.status) continue;
+        if (!heard) est.textContent = "Encendiéndose… la primera nota puede tardar un poco.";
+        let fin = false;
+        for (const it of s.items || []) {
+          if (it.type === "heard") { heard = it.text; est.remove(); if (heard) yoB = burbuja("yo", "🎤 " + heard); else { burbuja("est", "No te escuché bien. Intenta de nuevo, un poco más cerca."); fin = true; } }
+          else if (it.type === "audio") { cola.push(it); siguiente(); }
+          else if (it.type === "reply") reply = it.text;
+          else if (it.type === "done") fin = true;
+        }
+        if (reply && !ellaB) ellaB = burbuja("ella", reply);
+        if (fin || ["FAILED", "CANCELLED", "TIMED_OUT"].includes(s.status)) break;
+      }
+      est.remove();
+      if (!heard) throw new Error();
+    } catch { est.textContent = "No pude responder ahora. Intenta de nuevo en un momento."; if (!est.isConnected) burbuja("est", "No pude responder ahora. Intenta de nuevo en un momento."); }
+    ocupado = false; mic.disabled = false;
+  }
+  mic?.addEventListener("click", async () => {
+    if (ocupado) return;
+    if (rec && rec.state === "recording") { rec.stop(); return; }
+    try { reproductor = vozMod?.unlockAudio?.() || new Audio(); } catch { reproductor = new Audio(); }
+    try { stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true } }); }
+    catch { return burbuja("est", "Para mandar una nota de voz tienes que permitir el micrófono en tu navegador."); }
+    chunks = [];
+    const type = ["audio/webm;codecs=opus", "audio/mp4", "audio/webm"].find((t) => window.MediaRecorder?.isTypeSupported?.(t)) || "";
+    rec = new MediaRecorder(stream, type ? { mimeType: type } : undefined);
+    rec.ondataavailable = (e) => e.data.size && chunks.push(e.data);
+    rec.onstop = () => {
+      stream.getTracks().forEach((t) => t.stop());
+      mic.classList.remove("grabando"); mic.textContent = "🎤";
+      const blob = new Blob(chunks, { type: rec.mimeType || "audio/webm" });
+      if (blob.size > 3000) enviar(blob); else burbuja("est", "Se cortó muy rápido. Toca el micrófono, habla y toca de nuevo para enviar.");
+    };
+    rec.start();
+    mic.classList.add("grabando"); mic.textContent = "■ Enviar";
+  });
+})();
 $("chatLog").addEventListener("click", async (e) => {
   const b = e.target.closest(".chat-f"); if (!b) return;
   try {
