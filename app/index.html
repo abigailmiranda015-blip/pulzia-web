@@ -779,6 +779,7 @@ async function abrirChat() {
   $("chatLog").innerHTML = "";
   try { const { history } = await apiCall("/chat"); history.forEach((h) => burbuja(h.role === "user" ? "yo" : "ella", h.content)); } catch {}
   if (!$("chatLog").children.length) burbuja("ella", "Hola, soy " + (perfilApp.asistente || "tu asistente") + ". ¿En qué te ayudo?");
+  apiCall("/docs").then((r) => leerPendientes(r.docs)).catch(() => {});
   $("chatTxt").focus();
 }
 $("chatBtn").addEventListener("click", abrirChat);
@@ -938,9 +939,25 @@ async function textoDe(f) {
   if (/\.(txt|md)$/.test(n) || f.type.startsWith("text/")) return new TextDecoder().decode(buf);
   return "";
 }
+// Archivos que llegaron por WhatsApp sin texto (PDF, Word, Excel): se leen aquí y se les guarda el texto.
+let leyendoDocs = false;
+async function leerPendientes(docs) {
+  if (leyendoDocs) return; leyendoDocs = true;
+  try {
+    for (const d of docs.filter((x) => !x.chars && !(x.type || "").startsWith("image/")).slice(0, 5)) {
+      try {
+        const r = await fetch(API + "/docs/" + d.id + "/archivo", { headers: { Authorization: "Bearer " + (await auth.currentUser.getIdToken()) } });
+        if (!r.ok) continue;
+        const text = await textoDe(new File([await r.blob()], d.name, { type: d.type }));
+        if (text) await apiCall("/docs/" + d.id + "/texto", { method: "PUT", body: JSON.stringify({ text }) });
+      } catch {}
+    }
+  } finally { leyendoDocs = false; }
+}
 async function cargarDocs() {
   try {
     const r = await apiCall("/docs");
+    leerPendientes(r.docs).then(() => {});
     $("docList").innerHTML = r.docs.length ? r.docs.map((d) => `<div class="doc-r" data-id="${escH(d.id)}"><span>${escH(d.name)} <small>· ${Math.max(1, Math.round(d.size / 1024))} KB${d.chars ? "" : " · sin texto"}</small></span><button type="button">Quitar</button></div>`).join("") : '<p class="muted" style="margin:0">Todavía no subes archivos.</p>';
   } catch { $("docList").innerHTML = ""; }
 }
