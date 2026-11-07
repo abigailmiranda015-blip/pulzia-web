@@ -1,8 +1,7 @@
 <!doctype html><meta charset="utf-8"><meta name="robots" content="noindex"><title>ref</title>
-<body style="margin:0;background:#222">
-<img id="a" src="puli-ref-pie.jpg" style="height:45vh"><img id="b" src="puli-ref-escritorio.jpg" style="height:45vh">
+<body style="margin:0;background:#222"><p id="s" style="color:#fff">...</p>
 <script>
-async function copiar(id){const i=document.getElementById(id);const c=document.createElement('canvas');c.width=i.naturalWidth;c.height=i.naturalHeight;c.getContext('2d').drawImage(i,0,0);const blob=await new Promise(r=>c.toBlob(r,'image/png'));await navigator.clipboard.write([new ClipboardItem({'image/png':blob})]);document.title='copiado '+id;}
-document.getElementById('a').onclick=()=>copiar('a').catch(e=>document.title='err '+e);
-document.getElementById('b').onclick=()=>copiar('b').catch(e=>document.title='err '+e);
+const toB64=async u=>{const b=await (await fetch(u)).blob();return await new Promise(r=>{const f=new FileReader();f.onload=()=>r(f.result);f.readAsDataURL(b)})};
+(async()=>{const d={pie:await toB64('puli-ref-pie.jpg'),esc:await toB64('puli-ref-escritorio.jpg')};
+const t=window.opener||window.parent; if(t&&t!==window){t.postMessage({pzref:d},'*');document.getElementById('s').textContent='enviado';}else document.getElementById('s').textContent='sin opener';})();
 </script>
