@@ -39,8 +39,20 @@ export function startOwnVoiceCall({ getToken, crm = "ninguno", pedido, getContex
     return j;
   };
   const camilaTalking = () => !!playing || queue.length > 0;
-  // Despierta el servidor de voz apenas se abre la llamada, para que el arranque en frío (~50 s) pase mientras la persona saluda.
-  api("/voice/warm", { method: "POST", body: "{}" }).catch(() => {});
+  // El servidor de voz se apaga solo cuando no se usa y tarda ~50 s en despertar: se espera a que esté listo antes de saludar y de escuchar.
+  let listo = false;
+  async function esperarServidor() {
+    try {
+      onSubtitle?.("Despertando a tu asistente, un momento…");
+      const { id } = await api("/voice/warm", { method: "POST", body: "{}" });
+      if (!id) return;
+      for (let i = 0; i < 60 && !stopped; i++) {
+        const r = await api("/voice/warm/" + id).catch(() => ({}));
+        if (r.ready || ["FAILED", "CANCELLED", "TIMED_OUT"].includes(r.status)) return;
+        await new Promise((ok) => setTimeout(ok, 2000));
+      }
+    } catch {}
+  }
 
   const a = reproductor || unlockAudio();
   // Si el navegador igual bloquea el sonido, el próximo toque en la pantalla lo vuelve a intentar.
@@ -118,7 +130,7 @@ export function startOwnVoiceCall({ getToken, crm = "ninguno", pedido, getContex
     const now = performance.now();
     // Mientras Camila habla se pide más volumen para no confundir su propia voz con la de la persona.
     const loud = rms > (camilaTalking() ? LOUD * 2.2 : LOUD);
-    if (!muted && loud) {
+    if (!muted && listo && loud) {
       silentSince = 0;
       if (!speakingSince) speakingSince = now;
       if (!recording && now - speakingSince > START_MS) { if (camilaTalking() || job) stopCamila(); startRec(); }
@@ -140,11 +152,14 @@ export function startOwnVoiceCall({ getToken, crm = "ninguno", pedido, getContex
       analyser.fftSize = 1024;
       ctx.createMediaStreamSource(stream).connect(analyser);
       onMode?.("connected");
+      loop();
+      await esperarServidor();
+      if (stopped) return;
+      listo = true;
       // Saludo inicial: se pide como texto para que Camila salude primero.
       // Si llamó desde un botón de acceso rápido, se responde eso de inmediato.
       if (pedido) { history.push({ role: "user", content: pedido }); sendTextTurn("(La persona te llamó desde un botón de acceso rápido y te pide: «" + pedido + "». Salúdala muy corto por su nombre y respóndele eso.)"); }
       else sendTextTurn("(La persona acaba de llamarte. Salúdala corto por su nombre y pregúntale en qué la ayudas.)");
-      loop();
     } catch {
       onError?.("No pude usar el micrófono.");
       end();
