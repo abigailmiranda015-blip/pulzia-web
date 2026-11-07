@@ -64,6 +64,7 @@ input { height: 50px; border-radius: 12px; border: 2px solid var(--line); backgr
 .chat-in input { flex: 1; min-width: 0; font: inherit; padding: 12px; border: 1px solid var(--line); border-radius: 12px; }
 .chat-in .btn { width: auto; padding: 0 16px; margin: 0; }
 .chat-in .chat-mic { background: var(--card); color: var(--ink, inherit); border: 1px solid var(--line); height: 58px; font-size: 20px; padding: 0 14px; }
+.chat-in #chatClip { font-size: 18px; }
 .chat-in .chat-mic.grabando { background: #d9534f; color: #fff; border-color: #d9534f; font-size: 15px; }
 .pasos { display: grid; gap: 8px; padding: 14px; border: 1px solid var(--line); border-radius: 16px; background: var(--card); text-align: left; }
 .pasos[hidden] { display: none; }
@@ -298,7 +299,7 @@ h2 { margin: 0; font-size: 22px; }
 <section class="screen" id="chat" hidden>
   <div class="chat-top"><button class="link-btn" type="button" id="chatBack">← Volver</button><b id="chatWho">Tu asistente</b><span></span></div>
   <div class="chat-log" id="chatLog" aria-live="polite"></div>
-  <form class="chat-in" id="chatForm"><input id="chatTxt" autocomplete="off" maxlength="2000" placeholder="Escribe un mensaje…"><button class="btn chat-mic" id="chatMic" type="button" aria-label="Enviar una nota de voz" title="Nota de voz">🎤</button><button class="btn call-btn" type="submit">Enviar</button></form>
+  <form class="chat-in" id="chatForm"><input id="chatTxt" autocomplete="off" maxlength="2000" placeholder="Escribe un mensaje…"><button class="btn chat-mic" id="chatClip" type="button" aria-label="Adjuntar un documento" title="Adjuntar documento">📎</button><input type="file" id="chatFile" multiple accept=".pdf,.doc,.docx,.xls,.xlsx,.csv,.txt,.md,image/*" hidden><button class="btn chat-mic" id="chatMic" type="button" aria-label="Enviar una nota de voz" title="Nota de voz">🎤</button><button class="btn call-btn" type="submit">Enviar</button></form>
 </section>
 
 <!-- Lo que sabe tu asistente: tableros y columnas del CRM que puede ver -->
@@ -957,6 +958,24 @@ $("docIn").addEventListener("change", async (e) => {
   }
   say(m, files.length === 1 ? "Listo, tu asistente ya puede leer " + files[0].name + "." : "Listo, se subieron " + files.length + " archivos.", true);
   cargarDocs(); showFuentesPlan();
+});
+
+// Adjuntar documentos desde el chat: se guardan en tus documentos y la asistente los lee desde el siguiente mensaje.
+$("chatClip").addEventListener("click", () => $("chatFile").click());
+$("chatFile").addEventListener("change", async (e) => {
+  const files = [...e.target.files]; e.target.value = "";
+  for (const f of files) {
+    const b = burbuja("est", "Subiendo " + f.name + "…");
+    try {
+      if (f.size > 10 * 1024 * 1024) throw new Error(f.name + " pesa más de 10 MB.");
+      let text = ""; try { text = await textoDe(f); } catch {}
+      const { id } = await apiCall("/docs", { method: "POST", body: JSON.stringify({ name: f.name, type: f.type, size: f.size, text: text || (f.type.startsWith("image/") ? "Imagen: " + f.name : "") }) });
+      const r = await fetch(API + "/docs/" + id + "/archivo", { method: "PUT", headers: { "Content-Type": "application/octet-stream", Authorization: "Bearer " + (await auth.currentUser.getIdToken()) }, body: f });
+      if (!r.ok) throw new Error("No se pudo guardar " + f.name + ".");
+      b.textContent = "📎 " + f.name + " guardado. Ya puedes preguntarme por él.";
+    } catch (err) { b.textContent = err.message || "No se pudo subir " + f.name + "."; }
+  }
+  try { cargarDocs(); showFuentesPlan(); } catch {}
 });
 $("docList").addEventListener("click", async (e) => {
   const row = e.target.closest(".doc-r"); if (!row || e.target.tagName !== "BUTTON") return;
