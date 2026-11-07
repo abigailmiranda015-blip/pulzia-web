@@ -122,7 +122,7 @@ export function createOffice(stage, base = "office/") {
       clearTimeout(this._calla);
       if (on && mode === "habla") vids.habla.playbackRate = 1;
       // Al terminar de hablar, el video de "habla" no debe seguir moviéndose: se apura hasta su final y vuelve a trabajar.
-      if (!on) this._calla = setTimeout(() => { if (!talking && mode === "habla") vids.habla.playbackRate = 4; }, 500);
+      if (!on) this._calla = setTimeout(() => { if (!talking && mode === "habla") vids.habla.playbackRate = 1.8; }, 500);
       if (on && mode === "trabaja" && !wantTv) exitTo(() => (wantTv ? show("presenta", 0) : show("habla", 0)));
     },
   };
