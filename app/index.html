@@ -130,6 +130,12 @@ h2 { margin: 0; font-size: 22px; }
 .call .scene { position: absolute; left: 0; top: 0; width: 960px; height: 540px; transform-origin: 0 0; transition: transform .9s ease; }
 .call .scene video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; opacity: 0; transition: opacity .55s linear; }
 .call .scene video.on { opacity: 1; }
+.call .vc { position: absolute; inset: 0; display: none; background: #0b1312 url(videollamada/poster.jpg) center 20%/cover no-repeat; }
+.call .vc video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: center 20%; opacity: 0; transition: opacity .3s linear; }
+.call .vc video.on { opacity: 1; }
+.call .stage.vcmode .vc { display: block; }
+.call .stage.vcmode .scene { display: none; }
+.call .vista { position: absolute; z-index: 7; top: max(12px, env(safe-area-inset-top)); right: max(12px, env(safe-area-inset-right)); height: 36px; padding: 0 12px; border: 0; border-radius: 18px; background: #0008; color: #fff; font: 600 13px/1 inherit; cursor: pointer; }
 .call .tv { position: absolute; left: 289px; top: 43px; width: 550px; height: 310px; z-index: 100000; box-sizing: border-box; padding: 14px 16px; display: flex; flex-direction: column; gap: 10px; background: #f4f6fb; color: #1b2230; border-radius: 3px; opacity: 0; pointer-events: none; transition: opacity .6s ease; cursor: pointer; }
 .call .tv.on { opacity: 1; pointer-events: auto; }
 .call .tv-head { display: flex; align-items: baseline; justify-content: space-between; font-size: 24px; font-weight: 800; letter-spacing: -.01em; }
@@ -352,6 +358,8 @@ h2 { margin: 0; font-size: 22px; }
 <section class="screen call" id="call" hidden>
   <div class="stage" id="cStage">
     <div class="scene" id="cScene"><div class="tv" id="cTv" role="button" tabindex="0" aria-label="Ver la lista de pendientes"></div></div>
+    <div class="vc" id="cVc"></div>
+    <button class="vista" type="button" id="cVista">🏢 Oficina</button>
     <div class="hud"><div class="who" id="cWho">Tu asistente</div><div class="state"><span class="dot" id="cDot"></span><span id="cState">Conectando…</span> · <span id="cTime">0:00</span></div></div>
     <div class="ficha" id="cFicha" hidden aria-live="polite"></div>
   </div>
@@ -521,9 +529,34 @@ async function getOffice() {
   });
   return office;
 }
+// Vista de la llamada: "videollamada" (Camila tipo selfie, por defecto) u "oficina" (escritorio y tele). Se recuerda en este celular.
+let vc = null, vista = "videollamada";
+try { vista = localStorage.getItem("pulzia.vista") || "videollamada"; } catch {}
+async function getVc() {
+  if (vc) return vc;
+  const { createVideoCall } = await import("./videollamada.js");
+  vc = createVideoCall($("cVc"));
+  return vc;
+}
+const enVc = () => vista === "videollamada";
+function pintarVista() {
+  stage.classList.toggle("vcmode", enVc());
+  $("cVista").textContent = enVc() ? "🏢 Ver oficina" : "📱 Ver cara a cara";
+  $("cVista").setAttribute("aria-label", enVc() ? "Cambiar a la vista de la oficina" : "Cambiar a la vista cara a cara");
+}
+$("cVista").addEventListener("click", async () => {
+  vista = enVc() ? "oficina" : "videollamada";
+  try { localStorage.setItem("pulzia.vista", vista); } catch {}
+  pintarVista();
+  if (!conv) return;
+  if (enVc()) { office?.stop(); (await getVc()).start(); }
+  else { vc?.stop(); (await getOffice()).start(); layout(); }
+});
+pintarVista();
 const fmt = () => { const s = Math.floor((Date.now() - t0) / 1000); $("cTime").textContent = Math.floor(s / 60) + ":" + String(s % 60).padStart(2, "0"); };
 const showTalk = (talk) => {
   office?.speaking(talk);
+  if (enVc()) vc?.talk(talk);
   $("cDot").classList.toggle("talk", talk);
   $("cState").textContent = talk ? nombreAsis().replace(/^tu /, "Tu ") + " está hablando" : "Te escucho";
 };
@@ -543,6 +576,8 @@ const herramientas = {
     const d = await pendientes();
     if (!d) return window.__crm && window.__crm !== "ninguno" ? "No pude leer el CRM ahora. Dile que lo intente en un momento." : "No hay CRM conectado. Dile que lo puede conectar en la app.";
     (await pantalla).pintarTele(tv, d, etapa);
+    // En la vista cara a cara no hay tele: la lista sale abajo, en letra grande.
+    if (enVc()) { verLista(); return d.texto; }
     tv.dataset.on = "1";
     office?.present();
     if (office?.mode === "explica") tv.classList.add("on");
@@ -574,6 +609,9 @@ const endCall = async () => {
   clearInterval(tick); tick = null;
   const c = conv; conv = null;
   try { await c?.endSession(); } catch {}
+  $("cState").textContent = "Llamada terminada";
+  if (enVc() && vc) await vc.bye();
+  vc?.stop();
   cerrarPantalla(); office?.stop(); tvMode = false; stage.classList.remove("tvmode");
   window.__go?.("home");
 };
@@ -592,7 +630,9 @@ $("callBtn").addEventListener("click", async () => {
   $("cTime").textContent = "0:00"; $("cState").textContent = "Conectando…";
   $("cMute").setAttribute("aria-pressed", "false");
   cerrarPantalla(); datos = null; datosP = null; tvMode = false; stage.classList.remove("tvmode");
-  (await getOffice()).start(); layout();
+  pintarVista();
+  if (enVc()) (await getVc()).start();
+  else { (await getOffice()).start(); layout(); }
   pendientes(); // se lee el CRM de antemano para que la tele aparezca al tiro
   // Motor de la llamada: el servidor de voz propio de Pulzia (RunPod), con la voz de Camila.
   const own = await import("./voz-propia.js").catch(() => null);
@@ -606,6 +646,8 @@ $("callBtn").addEventListener("click", async () => {
   const alEscuchar = (t) => {
     marcado = false;
     const q = (t || "").toLowerCase();
+    // Si le cuentas una buena noticia, celebra contigo.
+    if (enVc() && /\b(vend[ií]|cerr[eé]|aceptaron|acept[oó]|me pagaron|ganamos|buena noticia|lo logr[eé])\b/.test(q)) vc?.celebrate();
     setTimeout(() => {
       if (marcado) return;
       const f = q.match(/ficha (?:de(?:l)?|del cliente)?\s*(.+?)[.?!]*$/);
@@ -628,7 +670,7 @@ $("callBtn").addEventListener("click", async () => {
     onAccion: alAccion,
     onMode: (mode) => {
       if (mode === "connected") { t0 = Date.now(); tick = setInterval(fmt, 1000); $("cState").textContent = "Encendiendo a " + nombreAsis() + "…"; return; }
-      if (mode === "thinking") { $("cState").textContent = "Pensando…"; return; }
+      if (mode === "thinking") { $("cState").textContent = "Pensando…"; if (enVc()) vc?.think(); return; }
       showTalk(mode === "speaking");
     },
     onError: (t) => ($("cState").textContent = t),
