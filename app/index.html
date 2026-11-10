@@ -517,6 +517,7 @@ $("forgot").addEventListener("click", async () => {
 });
 
 // Llamada por internet con la asistente (servidor de voz propio en RunPod, con la voz de Camila). Funciona con o sin CRM conectado.
+const AGENT_ID = "agent_9401m6prfzjjfszv8e8wq4pf1zr0"; // ElevenLabs: «Pulzia - Llamada por la app»
 let conv = null, tick = null, t0 = 0;
 // Oficina (videos que se funden en poses que calzan), la tele con los pendientes y la ficha de abajo.
 let office = null, tvMode = false, datos = null, datosP = null;
@@ -658,7 +659,33 @@ $("callBtn").addEventListener("click", async () => {
   $("cRing").hidden = false;
   if (enVc()) getVc(); else getOffice();
   pendientes(); // se lee el CRM de antemano para que la tele aparezca al tiro
-  // Motor de la llamada: el servidor de voz propio de Pulzia (RunPod), con la voz de Camila.
+  // Motor de la llamada: agente de voz de ElevenLabs (contesta al instante). Con ?motor=propio se usa el servidor propio (RunPod).
+  if (new URLSearchParams(location.search).get("motor") !== "propio") {
+    try {
+      const { Conversation } = await import("https://cdn.jsdelivr.net/npm/@elevenlabs/client@1.30.0/+esm");
+      let contesto = false;
+      // «Llamando…» hasta que la asistente empieza a hablar; ahí aparece y saluda.
+      const contestar = () => {
+        if (contesto) return;
+        contesto = true; $("cRing").hidden = true;
+        (async () => { if (enVc()) (await getVc()).start(); else { (await getOffice()).start(); layout(); } })();
+      };
+      const asis = nombreAsis() === "tu asistente" ? "Camila" : nombreAsis();
+      conv = await Conversation.startSession({
+        agentId: AGENT_ID,
+        connectionType: "websocket",
+        dynamicVariables: { nombre: (perfilApp.usuario || (user?.displayName || "").split(" ")[0] || "").trim(), asistente: asis, crm: window.__crm || "ninguno" },
+        clientTools: herramientas,
+        onConnect: () => { t0 = Date.now(); tick = setInterval(fmt, 1000); $("cState").textContent = "Llamando…"; },
+        onModeChange: ({ mode }) => { if (mode === "speaking") contestar(); if (contesto) showTalk(mode === "speaking"); },
+        onDisconnect: () => { if (conv) endCall(); },
+        onError: () => { $("cState").textContent = "Se cortó la conexión"; },
+      });
+      setTimeout(contestar, 8000); // por si el saludo se demora, igual aparece
+      return;
+    } catch (err) { console.log("eleven", err); }
+  }
+  // Motor de respaldo: el servidor de voz propio de Pulzia (RunPod), con la voz de Camila.
   const own = await import("./voz-propia.js?v=14").catch(() => null);
   const st = own ? await own.voiceStatus(() => user.getIdToken()) : null;
   if (!st?.ready || !(st.left > 0)) {
