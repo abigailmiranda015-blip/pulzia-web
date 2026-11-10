@@ -44,7 +44,7 @@ export async function voiceStatus(getToken) {
 
 export function startOwnVoiceCall({ getToken, crm = "ninguno", pedido, getContexto, onMode, onSubtitle, onHeard, onAccion, onError, onEnd }) {
   let stopped = false, ctx, stream, analyser, rec, chunks = [], speakingSince = 0, silentSince = 0, recording = false;
-  let job = null, queue = [], playing = null, muted = false, hablo = false;
+  let job = null, queue = [], playing = null, muted = false, hablo = false, contestar = () => {};
   const history = [];
   let LOUD = 0.022, QUIET = 0.012;
   const START_MS = 250, END_MS = 750;
@@ -214,18 +214,23 @@ export function startOwnVoiceCall({ getToken, crm = "ninguno", pedido, getContex
       ctx.createMediaStreamSource(stream).connect(analyser);
       onMode?.("connected");
       loop();
+      // Suena el tono mientras el servidor de voz despierta. El saludo se pide de inmediato (queda en fila en el servidor)
+      // y la asistente «contesta» recién cuando llega el audio del saludo.
       const paraTono = tonoLlamada();
-      await esperarServidor();
-      paraTono();
-      if (stopped) return;
-      // Umbrales según el ruido medido durante el tono.
-      if (nRuido > 30) { LOUD = Math.max(0.022, ruido * 3); QUIET = Math.max(0.012, ruido * 1.6); }
-      onMode?.("lista");
-      listo = true;
-      // Saludo inicial: se pide como texto para que Camila salude primero.
-      // Si llamó desde un botón de acceso rápido, se responde eso de inmediato.
-      if (pedido) { history.push({ role: "user", content: pedido }); sendTextTurn("(La persona te llamó desde un botón de acceso rápido y te pide: «" + pedido + "». Salúdala muy corto por su nombre y respóndele eso.)"); }
-      else sendTextTurn("(La persona acaba de llamarte. Salúdala como en una llamada entre conocidas, solo con «Hola» + su nombre + «¿cómo estás?», y nada más: no preguntes todavía en qué la ayudas. Cuando te conteste cómo está o te pregunte cómo estás tú, responde «Bien, gracias. Cuéntame, ¿qué necesitas?». No digas «perfecto». Nunca te despidas si ella no se despidió.)", true);
+      let contesto = false;
+      contestar = () => {
+        if (contesto || stopped) return;
+        contesto = true; paraTono();
+        // Umbrales según el ruido medido durante el tono.
+        if (nRuido > 30) { LOUD = Math.max(0.022, ruido * 3); QUIET = Math.max(0.012, ruido * 1.6); }
+        onMode?.("lista");
+        listo = true;
+      };
+      // Saludo inicial. Si llamó desde un botón de acceso rápido, se responde eso de inmediato.
+      if (pedido) { history.push({ role: "user", content: pedido }); await sendTextTurn("(La persona te llamó desde un botón de acceso rápido y te pide: «" + pedido + "». Salúdala muy corto por su nombre y respóndele eso.)", false, true); }
+      else await sendTextTurn("(La persona acaba de llamarte. Salúdala como en una llamada entre conocidas, solo con «Hola» + su nombre + «¿cómo estás?», y nada más: no preguntes todavía en qué la ayudas. Cuando te conteste cómo está o te pregunte cómo estás tú, responde «Bien, gracias. Cuéntame, ¿qué necesitas?». No digas «perfecto». Nunca te despidas si ella no se despidió.)", true, true);
+      // Si el saludo no llegó (servidor caído o muy lento), igual se contesta para poder hablar.
+      if (!contesto && !stopped) { contestar(); onError?.("Tu asistente se demoró en contestar. Háblale y te responde."); }
     } catch {
       onError?.("No pude usar el micrófono.");
       end();
@@ -252,9 +257,9 @@ export function startOwnVoiceCall({ getToken, crm = "ninguno", pedido, getContex
     return () => { parar = true; clearTimeout(t); };
   }
 
-  async function sendTextTurn(text, guardar) {
+  async function sendTextTurn(text, guardar, saludo) {
     hablo = false;
-    onMode?.("thinking");
+    if (!saludo) onMode?.("thinking");
     try {
       const { id } = await api("/voice/turn", { method: "POST", body: JSON.stringify({ text, history, crm, contexto: (await getContexto?.()) || undefined }) });
       // La instrucción del saludo queda en el historial para que el resto de la llamada la recuerde.
@@ -266,13 +271,15 @@ export function startOwnVoiceCall({ getToken, crm = "ninguno", pedido, getContex
         for (const it of s.items || []) {
           if (it.type === "accion") onAccion?.(it);
           else if (it.type === "reply") history.push({ role: "assistant", content: it.text });
-          else if (it.type === "audio" && job === id) { queue.push(it); playNext(); }
+          else if (it.type === "audio" && job === id) { if (saludo) contestar(); queue.push(it); playNext(); }
           else if (it.type === "done") tries = 1e9;
         }
       }
       if (job === id) job = null;
+      if (saludo && !listo) return;
       if (!camilaTalking()) onMode?.("listening");
     } catch (e) {
+      if (saludo && !listo) return;
       onError?.(e.status === 402 ? "Se acabaron tus minutos de llamada de este mes." : "No pude conectar la voz (" + (e.status || "sin red") + ": " + (e.message || "error") + ").");
       onMode?.("listening");
     }
