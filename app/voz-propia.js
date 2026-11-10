@@ -8,8 +8,18 @@ export const API = "https://pulzia-api.abigailmiranda015.workers.dev";
 // En celulares (sobre todo iPhone) el navegador solo deja sonar audio que se "desbloqueó" con un toque.
 // Por eso se usa un único reproductor, desbloqueado en el mismo toque de «Llamar», para toda la llamada.
 const SILENCIO = "data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAQB8AAIA+AAACABAAZGF0YQAAAAA=";
-let reproductor = null;
+let reproductor = null, audioCtx = null;
+// El AudioContext (con el que se mide si la persona está hablando) también tiene que nacer en el toque:
+// en iPhone, si se crea después, queda "suspendido" y el micrófono se lee como silencio (no te escucha).
+function ctxDesbloqueado() {
+  try {
+    if (!audioCtx || audioCtx.state === "closed") audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    audioCtx.resume?.().catch(() => {});
+  } catch {}
+  return audioCtx;
+}
 export function unlockAudio() {
+  ctxDesbloqueado();
   if (!reproductor) reproductor = new Audio();
   reproductor.playsInline = true;
   reproductor.src = SILENCIO;
@@ -57,7 +67,10 @@ export function startOwnVoiceCall({ getToken, crm = "ninguno", pedido, getContex
   const a = reproductor || unlockAudio();
   // Si el navegador igual bloquea el sonido, el próximo toque en la pantalla lo vuelve a intentar.
   let bloqueado = false;
-  const reintentar = () => { if (bloqueado && playing) { bloqueado = false; playing.play().catch(() => {}); } };
+  const reintentar = () => {
+    if (ctx && ctx.state !== "running") ctx.resume?.().catch(() => {});
+    if (bloqueado && playing) { bloqueado = false; playing.play().catch(() => {}); }
+  };
   document.addEventListener("pointerdown", reintentar);
 
   function stopCamila() {
@@ -118,6 +131,7 @@ export function startOwnVoiceCall({ getToken, crm = "ninguno", pedido, getContex
     rec.onstop = () => { const blob = new Blob(chunks, { type: rec.mimeType || "audio/webm" }); if (blob.size > 3000) sendTurn(blob); };
     rec.start();
     recording = true;
+    onMode?.("oyendo");
   }
 
   function loop() {
@@ -147,7 +161,9 @@ export function startOwnVoiceCall({ getToken, crm = "ninguno", pedido, getContex
   (async () => {
     try {
       stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } });
-      ctx = new AudioContext();
+      ctx = ctxDesbloqueado() || new AudioContext();
+      if (ctx.state !== "running") { try { await ctx.resume(); } catch {} }
+      if (ctx.state !== "running") onError?.("Toca la pantalla para que " + "te pueda escuchar.");
       analyser = ctx.createAnalyser();
       analyser.fftSize = 1024;
       ctx.createMediaStreamSource(stream).connect(analyser);
@@ -196,7 +212,7 @@ export function startOwnVoiceCall({ getToken, crm = "ninguno", pedido, getContex
     document.removeEventListener("pointerdown", reintentar);
     try { rec?.state === "recording" && rec.stop(); } catch {}
     stream?.getTracks().forEach((t) => t.stop());
-    ctx?.close().catch(() => {});
+    ctx?.suspend?.().catch(() => {});
     onEnd?.();
   }
 
