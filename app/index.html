@@ -677,11 +677,23 @@ $("callBtn").addEventListener("click", async () => {
         dynamicVariables: { nombre: (perfilApp.usuario || (user?.displayName || "").split(" ")[0] || "").trim(), asistente: asis, crm: window.__crm || "ninguno" },
         clientTools: herramientas,
         onConnect: () => { t0 = Date.now(); tick = setInterval(fmt, 1000); $("cState").textContent = "Llamando…"; },
-        onModeChange: ({ mode }) => { if (mode === "speaking") contestar(); if (contesto) showTalk(mode === "speaking"); },
+        onModeChange: ({ mode }) => { if (mode === "speaking") contestar(); },
         onDisconnect: () => { if (conv) endCall(); },
         onError: () => { $("cState").textContent = "Se cortó la conexión"; },
       });
       setTimeout(contestar, 8000); // por si el saludo se demora, igual aparece
+      // Boca sincronizada con el sonido real: mueve la boca solo mientras suena su voz; en las pausas y cuando escucha, quieta.
+      const c0 = conv;
+      let hab = false, tOn = 0, tOff = 0;
+      const lip = () => {
+        if (conv !== c0) return;
+        let v = 0; try { v = c0.getOutputVolume(); } catch {}
+        const now = performance.now();
+        if (v > 0.03) { tOff = 0; if (!tOn) tOn = now; if (!hab && contesto && now - tOn > 60) { hab = true; showTalk(true); } }
+        else if (v < 0.015) { tOn = 0; if (!tOff) tOff = now; if (hab && now - tOff > 350) { hab = false; showTalk(false); } }
+        requestAnimationFrame(lip);
+      };
+      requestAnimationFrame(lip);
       return;
     } catch (err) { console.log("eleven", err); }
   }
