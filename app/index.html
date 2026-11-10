@@ -661,6 +661,20 @@ $("callBtn").addEventListener("click", async () => {
   pendientes(); // se lee el CRM de antemano para que la tele aparezca al tiro
   // Motor de la llamada: agente de voz de ElevenLabs (contesta al instante). Con ?motor=propio se usa el servidor propio (RunPod).
   if (new URLSearchParams(location.search).get("motor") !== "propio") {
+    // Minutos del plan (prueba: 15 min). Se descuentan también los minutos de estas llamadas; al acabarse se corta y se invita a subir de plan.
+    // (Mientras el servidor no los registre, se llevan en este dispositivo.) La dueña de Pulzia no tiene límite.
+    const duena = (user?.email || "").toLowerCase() === "abigailmiranda015@gmail.com";
+    const kMin = "pz-min-" + user.uid + "-" + new Date().toISOString().slice(0, 7);
+    let gastado = 0; try { gastado = Number(localStorage.getItem(kMin)) || 0; } catch {}
+    let quedan = Infinity;
+    if (!duena) {
+      const st = await apiCall("/voice").catch(() => null);
+      quedan = st ? Math.max(0, (st.left ?? 0) - gastado) : Infinity;
+      if (quedan <= 5) {
+        endCall();
+        return say(m, st?.plan === "prueba" ? "Se acabaron tus 15 minutos de prueba. Para seguir conversando con tu asistente, sube de plan." : "Se acabaron tus minutos de llamada de este mes. Para seguir conversando, sube de plan.");
+      }
+    }
     try {
       const { Conversation } = await import("https://cdn.jsdelivr.net/npm/@elevenlabs/client@1.30.0/+esm");
       let contesto = false;
@@ -694,6 +708,17 @@ $("callBtn").addEventListener("click", async () => {
         requestAnimationFrame(lip);
       };
       requestAnimationFrame(lip);
+      // Cuenta los segundos de la llamada; si se acaban los minutos del plan, corta y avisa.
+      const reloj = setInterval(() => {
+        if (conv !== c0) return clearInterval(reloj);
+        gastado++; quedan--;
+        try { localStorage.setItem(kMin, String(gastado)); } catch {}
+        if (quedan <= 0) {
+          clearInterval(reloj);
+          endCall();
+          say(m, "Se acabaron los minutos de tu plan. Para seguir conversando con tu asistente, sube de plan.");
+        }
+      }, 1000);
       return;
     } catch (err) { console.log("eleven", err); }
   }
