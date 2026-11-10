@@ -557,7 +557,7 @@ let vc = null, vista = "videollamada";
 try { vista = localStorage.getItem("pulzia.vista") || "videollamada"; } catch {}
 async function getVc() {
   if (vc) return vc;
-  const { createVideoCall } = await import("./videollamada.js");
+  const { createVideoCall } = await import("./videollamada.js?v=6");
   vc = createVideoCall($("cVc"));
   return vc;
 }

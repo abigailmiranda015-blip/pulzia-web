@@ -3,14 +3,14 @@
 // Gestos de una vez (vuelven solos al estado de fondo): saludo, celebra, despide.
 
 const FADE = 120;
-const FILES = { escucha: "escucha.mp4", piensa: "piensa.mp4", habla: "habla.mp4", saludo: "saludo.mp4", celebra: "celebra.mp4", despide: "despide.mp4" };
+const FILES = { escucha: "escucha.mp4", escucha2: "escucha2.mp4", piensa: "piensa.mp4", habla: "habla.mp4", saludo: "saludo.mp4", celebra: "celebra.mp4", despide: "despide.mp4" };
 const ONCE = new Set(["saludo", "celebra", "despide"]);
 
 export function createVideoCall(box, base = "videollamada/") {
   const vids = {};
   for (const [k, f] of Object.entries(FILES)) {
     const v = document.createElement("video");
-    v.src = base + f + "?v=5";
+    v.src = base + f + "?v=6";
     v.muted = true;
     v.playsInline = true;
     v.setAttribute("playsinline", "");
@@ -21,12 +21,17 @@ export function createVideoCall(box, base = "videollamada/") {
     vids[k] = v;
   }
   let cur = null, fondo = "escucha", layer = 1, alive = false, onceDone = null;
+  // Escuchar tiene variantes (sonríe quieta / inclina la cabeza y asiente) que se van alternando para que se vea natural.
+  const ESCUCHA = ["escucha", "escucha2"];
+  const variante = () => (Math.random() < 0.4 ? "escucha2" : "escucha");
 
   function show(k) {
+    if (k === "escucha" && cur && ESCUCHA.includes(cur.dataset.k)) return; // ya está escuchando
+    if (k === "escucha") k = variante();
     const next = vids[k], prev = cur;
     if (next === prev && !ONCE.has(k)) return;
     cur = next;
-    next.loop = !ONCE.has(k);
+    next.loop = !ONCE.has(k) && !ESCUCHA.includes(k);
     // Los gestos parten del inicio; los de fondo (hablar, escuchar) siguen donde quedaron, para que la boca reaccione al tiro.
     if (ONCE.has(k)) { try { next.currentTime = 0; } catch {} }
     const ready = () => {
@@ -36,6 +41,13 @@ export function createVideoCall(box, base = "videollamada/") {
     };
     next.play().then(ready).catch(ready);
   }
+  // Al terminar una variante de escuchar, sigue con otra (o la misma).
+  ESCUCHA.forEach((k) => vids[k].addEventListener("ended", () => {
+    if (vids[k] !== cur || !alive || fondo !== "escucha") return;
+    const n = variante();
+    if (n === k) { try { vids[k].currentTime = 0; } catch {} vids[k].play().catch(() => {}); }
+    else show(n);
+  }));
   // Al terminar un gesto, vuelve al estado de fondo (todos los clips terminan en la misma pose).
   Object.entries(vids).forEach(([k, v]) => {
     if (!ONCE.has(k)) return;
