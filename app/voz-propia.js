@@ -83,18 +83,39 @@ export function startOwnVoiceCall({ getToken, crm = "ninguno", pedido, getContex
     onMode?.("listening");
   }
 
+  // En iPhone, con el micrófono abierto, el reproductor normal suena casi mudo (el sistema le baja el volumen).
+  // Por eso la voz se reproduce por el mismo AudioContext del micrófono, con un poco de ganancia; si falla, se usa el reproductor normal.
+  const b64aBuf = (b64) => { const bin = atob(b64), u = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) u[i] = bin.charCodeAt(i); return u.buffer; };
+  async function sonarWebAudio(part, reserva) {
+    if (!ctx || ctx.state === "closed") throw new Error("sin ctx");
+    if (ctx.state !== "running") await ctx.resume();
+    if (ctx.state !== "running") throw new Error("ctx suspendido");
+    const buf = await ctx.decodeAudioData(b64aBuf(part.wav_b64));
+    if (playing !== reserva || stopped) return; // la interrumpieron mientras se decodificaba
+    const src = ctx.createBufferSource(), g = ctx.createGain();
+    g.gain.value = 1.8; src.buffer = buf; src.connect(g).connect(ctx.destination);
+    const h = { pause: () => { try { src.stop(); } catch {} }, play: () => Promise.resolve() };
+    src.onended = () => { if (playing === h) { playing = null; playNext(); } };
+    playing = h; src.start();
+  }
   function playNext() {
     if (playing || !queue.length) { if (!playing && !queue.length && !job) onMode?.("listening"); return; }
     const part = queue.shift();
-    a.src = "data:audio/wav;base64," + part.wav_b64;
-    playing = a;
+    playing = { pause() {}, play: () => Promise.resolve() }; // reservado mientras se decodifica
+    const reserva = playing;
     onMode?.("speaking");
     onSubtitle?.(part.text);
-    a.onended = () => { if (playing === a) playing = null; playNext(); };
-    a.onerror = () => { if (playing === a) playing = null; playNext(); };
-    a.play().catch((e) => {
-      if (e?.name === "NotAllowedError") { bloqueado = true; onError?.("Toca la pantalla para escuchar a tu asistente."); }
-      else { playing = null; playNext(); }
+    sonarWebAudio(part, reserva).catch(() => {
+      if (playing !== reserva) return; // la interrumpieron mientras tanto
+      a.src = "data:audio/wav;base64," + part.wav_b64;
+      a.volume = 1;
+      playing = a;
+      a.onended = () => { if (playing === a) playing = null; playNext(); };
+      a.onerror = () => { if (playing === a) playing = null; playNext(); };
+      a.play().catch((e) => {
+        if (e?.name === "NotAllowedError") { bloqueado = true; onError?.("Toca la pantalla para escuchar a tu asistente."); }
+        else { playing = null; playNext(); }
+      });
     });
   }
 
