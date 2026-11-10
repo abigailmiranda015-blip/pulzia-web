@@ -2,7 +2,7 @@
 // así que se pueden encadenar y repetir sin saltos. Estados de fondo (se repiten): escucha, piensa, habla.
 // Gestos de una vez (vuelven solos al estado de fondo): saludo, celebra, despide.
 
-const FADE = 300;
+const FADE = 120;
 const FILES = { escucha: "escucha.mp4", piensa: "piensa.mp4", habla: "habla.mp4", saludo: "saludo.mp4", celebra: "celebra.mp4", despide: "despide.mp4" };
 const ONCE = new Set(["saludo", "celebra", "despide"]);
 
@@ -10,7 +10,7 @@ export function createVideoCall(box, base = "videollamada/") {
   const vids = {};
   for (const [k, f] of Object.entries(FILES)) {
     const v = document.createElement("video");
-    v.src = base + f + "?v=4";
+    v.src = base + f + "?v=5";
     v.muted = true;
     v.playsInline = true;
     v.setAttribute("playsinline", "");
@@ -27,7 +27,8 @@ export function createVideoCall(box, base = "videollamada/") {
     if (next === prev && !ONCE.has(k)) return;
     cur = next;
     next.loop = !ONCE.has(k);
-    try { next.currentTime = 0; } catch {}
+    // Los gestos parten del inicio; los de fondo (hablar, escuchar) siguen donde quedaron, para que la boca reaccione al tiro.
+    if (ONCE.has(k)) { try { next.currentTime = 0; } catch {} }
     const ready = () => {
       next.style.zIndex = String(++layer);
       next.classList.add("on");
