@@ -213,7 +213,7 @@ h2 { margin: 0; font-size: 22px; }
     </ul>
     <button class="btn primary" type="button" data-go="signup">Crear cuenta gratis</button>
     <button class="btn ghost" type="button" data-go="login">Ya tengo cuenta</button>
-    <p class="free">15 días gratis · sin tarjeta</p>
+    <p class="free">3 días gratis · sin tarjeta</p>
   </div>
 </section>
 
@@ -641,6 +641,18 @@ const endCall = async () => {
 // El módulo de voz se carga de antemano para poder desbloquear el sonido en el mismo toque.
 let vozMod = null;
 import("./voz-propia.js?v=14").then((m) => (vozMod = m)).catch(() => {});
+// Prueba gratis: 3 días desde que se crea la cuenta y máximo 5 minutos de voz. La dueña de Pulzia no tiene límite.
+const PRUEBA_DIAS = 3, PRUEBA_SEG = 300;
+const esDuena = () => (auth.currentUser?.email || "").toLowerCase() === "abigailmiranda015@gmail.com";
+async function estadoPrueba() {
+  if (esDuena()) return { vencida: false, plan: "empresa" };
+  const st = await apiCall("/voice").catch(() => null);
+  if (!st || st.plan !== "prueba") return { vencida: false, plan: st?.plan, st };
+  const alta = Date.parse(auth.currentUser?.metadata?.creationTime || "") || Date.now();
+  const vencida = Date.now() - alta > PRUEBA_DIAS * 864e5;
+  return { vencida, plan: "prueba", st, quedan: Math.max(0, Math.min(st.left ?? 0, PRUEBA_SEG - (st.used || 0))) };
+}
+const MSG_FIN_PRUEBA = "Tu prueba gratis de 3 días terminó. Para seguir usando a tu asistente, elige un plan.";
 $("callBtn").addEventListener("click", async () => {
   const m = $("mCall"); say(m, "");
   // El sonido se desbloquea en este mismo toque (si no, el iPhone no deja que la asistente se escuche).
@@ -661,16 +673,17 @@ $("callBtn").addEventListener("click", async () => {
   pendientes(); // se lee el CRM de antemano para que la tele aparezca al tiro
   // Motor de la llamada: agente de voz de ElevenLabs (contesta al instante). Con ?motor=propio se usa el servidor propio (RunPod).
   if (new URLSearchParams(location.search).get("motor") !== "propio") {
-    // Minutos del plan (prueba: 15 min). Se descuentan también los minutos de estas llamadas; al acabarse se corta y se invita a subir de plan.
+    // Minutos del plan (prueba: 5 min y 3 días). Se descuentan también los minutos de estas llamadas; al acabarse se corta y se invita a subir de plan.
     // Los minutos se guardan en el servidor de Pulzia. La dueña de Pulzia no tiene límite.
-    const duena = (user?.email || "").toLowerCase() === "abigailmiranda015@gmail.com";
+    const duena = esDuena();
     let quedan = Infinity, sinGuardar = 0;
     if (!duena) {
-      const st = await apiCall("/voice").catch(() => null);
-      quedan = st ? Math.max(0, st.left ?? 0) : Infinity;
+      const ep = await estadoPrueba();
+      if (ep.vencida) { endCall(); return say(m, MSG_FIN_PRUEBA); }
+      quedan = ep.plan === "prueba" ? ep.quedan : ep.st ? Math.max(0, ep.st.left ?? 0) : Infinity;
       if (quedan <= 5) {
         endCall();
-        return say(m, st?.plan === "prueba" ? "Se acabaron tus 15 minutos de prueba. Para seguir conversando con tu asistente, sube de plan." : "Se acabaron tus minutos de llamada de este mes. Para seguir conversando, sube de plan.");
+        return say(m, ep.plan === "prueba" ? "Se acabaron tus 5 minutos de llamada de prueba. Para seguir conversando con tu asistente, elige un plan." : "Se acabaron tus minutos de llamada de este mes. Para seguir conversando, sube de plan.");
       }
     }
     try {
@@ -735,7 +748,7 @@ $("callBtn").addEventListener("click", async () => {
   const st = own ? await own.voiceStatus(() => user.getIdToken()) : null;
   if (!st?.ready || !(st.left > 0)) {
     endCall();
-    return say(m, !st ? "No se pudo conectar la llamada. Revisa tu internet y prueba de nuevo." : st.left > 0 ? "Las llamadas todavía no están disponibles. Prueba en un rato." : st.plan === "prueba" ? "Se acabaron tus 15 minutos de prueba. Elige un plan para seguir llamando." : "Se acabaron tus minutos de llamada de este mes.");
+    return say(m, !st ? "No se pudo conectar la llamada. Revisa tu internet y prueba de nuevo." : st.left > 0 ? "Las llamadas todavía no están disponibles. Prueba en un rato." : st.plan === "prueba" ? "Se acabaron tus 5 minutos de llamada de prueba. Elige un plan para seguir llamando." : "Se acabaron tus minutos de llamada de este mes.");
   }
   // Si la persona lo pide con palabras claras, la tele o la ficha se muestran aunque Camila no ponga la marca.
   let marcado = false;
@@ -936,6 +949,7 @@ $("chatForm").addEventListener("submit", async (e) => {
   e.preventDefault();
   const t = $("chatTxt").value.trim(); if (!t) return;
   $("chatTxt").value = ""; burbuja("yo", t);
+  if ((await estadoPrueba()).vencida) { burbuja("ella", MSG_FIN_PRUEBA); return; }
   const est = burbuja("est", "Escribiendo…");
   try {
     const { id } = await apiCall("/chat", { method: "POST", body: JSON.stringify({ text: t }) });
