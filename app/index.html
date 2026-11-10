@@ -66,6 +66,14 @@ input { height: 50px; border-radius: 12px; border: 2px solid var(--line); backgr
 .chat-in .chat-mic { background: var(--card); color: var(--ink, inherit); border: 1px solid var(--line); height: 58px; font-size: 20px; padding: 0 14px; }
 .chat-in #chatClip { font-size: 18px; }
 .chat-in .chat-mic.grabando { background: #d9534f; color: #fff; border-color: #d9534f; font-size: 15px; }
+.rec-bar { flex: 1; min-width: 0; display: flex; align-items: center; gap: 10px; padding: 0 12px; border: 1px solid #d9534f; border-radius: 12px; color: #d9534f; font-weight: 600; font-variant-numeric: tabular-nums; background: var(--card); }
+.rec-bar[hidden] { display: none; }
+.rec-dot { width: 10px; height: 10px; border-radius: 50%; background: #d9534f; flex: none; animation: recp 1s ease-in-out infinite; }
+@keyframes recp { 50% { opacity: .2; } }
+.rec-lv { display: flex; align-items: center; gap: 3px; height: 28px; flex: 1; min-width: 0; overflow: hidden; justify-content: flex-end; }
+.rec-lv i { width: 3px; min-height: 3px; border-radius: 2px; background: #d9534f; flex: none; }
+.rec-x { border: 0; background: transparent; color: inherit; font-size: 20px; padding: 0 4px; cursor: pointer; min-height: 44px; }
+.chat-in.grabando #chatTxt, .chat-in.grabando #chatClip, .chat-in.grabando button[type=submit] { display: none; }
 .pasos { display: grid; gap: 8px; padding: 14px; border: 1px solid var(--line); border-radius: 16px; background: var(--card); text-align: left; }
 .pasos[hidden] { display: none; }
 #pNext { margin-top: 4px; }
@@ -305,7 +313,7 @@ h2 { margin: 0; font-size: 22px; }
 <section class="screen" id="chat" hidden>
   <div class="chat-top"><button class="link-btn" type="button" id="chatBack">← Volver</button><b id="chatWho">Tu asistente</b><span></span></div>
   <div class="chat-log" id="chatLog" aria-live="polite"></div>
-  <form class="chat-in" id="chatForm"><input id="chatTxt" autocomplete="off" maxlength="2000" placeholder="Escribe un mensaje…"><button class="btn chat-mic" id="chatClip" type="button" aria-label="Adjuntar un documento" title="Adjuntar documento">📎</button><input type="file" id="chatFile" multiple accept=".pdf,.doc,.docx,.xls,.xlsx,.csv,.txt,.md,image/*" hidden><button class="btn chat-mic" id="chatMic" type="button" aria-label="Enviar una nota de voz" title="Nota de voz">🎤</button><button class="btn call-btn" type="submit">Enviar</button></form>
+  <form class="chat-in" id="chatForm"><input id="chatTxt" autocomplete="off" maxlength="2000" placeholder="Escribe un mensaje…"><button class="btn chat-mic" id="chatClip" type="button" aria-label="Adjuntar un documento" title="Adjuntar documento">📎</button><input type="file" id="chatFile" multiple accept=".pdf,.doc,.docx,.xls,.xlsx,.csv,.txt,.md,image/*" hidden><div class="rec-bar" id="recBar" hidden><span class="rec-dot"></span><span id="recMsg">0:00</span><span class="rec-lv" id="recLv"></span><button type="button" class="rec-x" id="recX" aria-label="Cancelar la nota de voz">✕</button></div><button class="btn chat-mic" id="chatMic" type="button" aria-label="Enviar una nota de voz" title="Nota de voz">🎤</button><button class="btn call-btn" type="submit">Enviar</button></form>
 </section>
 
 <!-- Lo que sabe tu asistente: tableros y columnas del CRM que puede ver -->
@@ -882,24 +890,62 @@ $("chatForm").addEventListener("submit", async (e) => {
     } catch { est.textContent = "No pude responder ahora. Intenta de nuevo en un momento."; if (!est.isConnected) burbuja("est", "No pude responder ahora. Intenta de nuevo en un momento."); }
     ocupado = false; mic.disabled = false;
   }
+  // Barra de grabación (como en Claude): punto rojo, tiempo y nivel de la voz, para que se note que está grabando.
+  const form = $("chatForm"), bar = $("recBar"), msg = $("recMsg"), lv = $("recLv");
+  let t0 = 0, timer = null, ac = null, raf = 0, cancelado = false;
+  const mmss = (s) => Math.floor(s / 60) + ":" + String(Math.floor(s % 60)).padStart(2, "0");
+  function barraOn(texto) { form.classList.add("grabando"); bar.hidden = false; msg.textContent = texto; lv.textContent = ""; }
+  function barraOff() {
+    clearInterval(timer); timer = null; cancelAnimationFrame(raf);
+    try { ac?.close(); } catch {} ac = null;
+    form.classList.remove("grabando"); bar.hidden = true; lv.textContent = "";
+    mic.classList.remove("grabando"); mic.textContent = "🎤"; mic.disabled = ocupado;
+  }
+  function nivel(st) {
+    try {
+      ac = new (window.AudioContext || window.webkitAudioContext)();
+      const an = ac.createAnalyser(); an.fftSize = 256; ac.createMediaStreamSource(st).connect(an);
+      const buf = new Uint8Array(an.fftSize); let last = 0;
+      const loop = (now) => {
+        raf = requestAnimationFrame(loop);
+        if (now - last < 90) return; last = now;
+        an.getByteTimeDomainData(buf);
+        let m = 0; for (const v of buf) m = Math.max(m, Math.abs(v - 128));
+        const i = document.createElement("i"); i.style.height = Math.max(3, Math.min(28, m * 0.6)) + "px";
+        lv.append(i); while (lv.children.length > 60) lv.firstChild.remove();
+      };
+      raf = requestAnimationFrame(loop);
+    } catch {}
+  }
+  $("recX").addEventListener("click", () => { if (rec && rec.state === "recording") { cancelado = true; rec.stop(); } else barraOff(); });
   mic?.addEventListener("click", async () => {
     if (ocupado) return;
     if (rec && rec.state === "recording") { rec.stop(); return; }
+    if (!navigator.mediaDevices?.getUserMedia || !window.MediaRecorder) return burbuja("est", "Este navegador no deja grabar notas de voz. Abre pulzia.app/app en Safari o Chrome.");
     try { reproductor = vozMod?.unlockAudio?.() || new Audio(); } catch { reproductor = new Audio(); }
+    mic.disabled = true; mic.textContent = "…";
+    barraOn("Permite el micrófono…");
     try { stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true } }); }
-    catch { return burbuja("est", "Para mandar una nota de voz tienes que permitir el micrófono en tu navegador."); }
-    chunks = [];
-    const type = ["audio/webm;codecs=opus", "audio/mp4", "audio/webm"].find((t) => window.MediaRecorder?.isTypeSupported?.(t)) || "";
-    rec = new MediaRecorder(stream, type ? { mimeType: type } : undefined);
+    catch { barraOff(); return burbuja("est", "Para mandar una nota de voz tienes que permitir el micrófono en tu navegador."); }
+    chunks = []; cancelado = false;
+    try {
+      const type = ["audio/webm;codecs=opus", "audio/mp4", "audio/webm"].find((t) => window.MediaRecorder?.isTypeSupported?.(t)) || "";
+      rec = new MediaRecorder(stream, type ? { mimeType: type } : undefined);
+    } catch { stream.getTracks().forEach((t) => t.stop()); barraOff(); return burbuja("est", "No pude empezar a grabar. Prueba de nuevo o abre la app en Safari o Chrome."); }
     rec.ondataavailable = (e) => e.data.size && chunks.push(e.data);
     rec.onstop = () => {
       stream.getTracks().forEach((t) => t.stop());
-      mic.classList.remove("grabando"); mic.textContent = "🎤";
+      const dur = (Date.now() - t0) / 1000;
+      barraOff();
+      if (cancelado) return;
       const blob = new Blob(chunks, { type: rec.mimeType || "audio/webm" });
-      if (blob.size > 3000) enviar(blob); else burbuja("est", "Se cortó muy rápido. Toca el micrófono, habla y toca de nuevo para enviar.");
+      if (blob.size > 3000 && dur >= 0.8) enviar(blob); else burbuja("est", "Se cortó muy rápido. Toca el micrófono, habla y toca de nuevo para enviar.");
     };
-    rec.start();
-    mic.classList.add("grabando"); mic.textContent = "■ Enviar";
+    rec.start(250);
+    t0 = Date.now(); msg.textContent = "0:00";
+    timer = setInterval(() => { const s = (Date.now() - t0) / 1000; msg.textContent = mmss(s); if (s >= 120) rec.stop(); }, 250);
+    nivel(stream);
+    mic.disabled = false; mic.classList.add("grabando"); mic.textContent = "■ Enviar";
   });
 })();
 $("chatLog").addEventListener("click", async (e) => {
