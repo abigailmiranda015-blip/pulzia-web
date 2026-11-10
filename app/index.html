@@ -170,6 +170,12 @@ h2 { margin: 0; font-size: 22px; }
 .call .hud { position: absolute; left: 0; right: 0; top: 0; padding: max(16px, env(safe-area-inset-top)) max(16px, env(safe-area-inset-right)) 40px max(16px, env(safe-area-inset-left)); background: linear-gradient(#000a, #0000); display: flex; flex-direction: column; align-items: center; gap: 4px; text-align: center; }
 .call .who { font-size: 20px; font-weight: 800; }
 .call .state { font-size: 15px; opacity: .9; display: flex; align-items: center; gap: 8px; }
+.call .pensando { margin-top: 6px; padding: 8px 14px; border-radius: 999px; background: #0f2a26e6; color: #fff; font-size: 15px; font-weight: 700; display: inline-flex; align-items: center; gap: 8px; box-shadow: 0 4px 14px #0006; }
+.call .pensando[hidden] { display: none; }
+.call .pz-dots { display: inline-flex; gap: 3px; }
+.call .pz-dots i { width: 6px; height: 6px; border-radius: 50%; background: #5eead4; animation: pzdot 1.1s infinite ease-in-out; }
+.call .pz-dots i:nth-child(2) { animation-delay: .18s; } .call .pz-dots i:nth-child(3) { animation-delay: .36s; }
+@keyframes pzdot { 0%, 80%, 100% { opacity: .25; transform: translateY(0); } 40% { opacity: 1; transform: translateY(-3px); } }
 .call .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--glow); }
 .call .dot.talk { animation: pulse 1s ease-in-out infinite; }
 @keyframes pulse { 50% { transform: scale(1.6); opacity: .5; } }
@@ -368,7 +374,7 @@ h2 { margin: 0; font-size: 22px; }
     <div class="scene" id="cScene"><div class="tv" id="cTv" role="button" tabindex="0" aria-label="Ver la lista de pendientes"></div></div>
     <div class="vc" id="cVc"></div>
     <button class="vista" type="button" id="cVista">🏢 Oficina</button>
-    <div class="hud"><div class="who" id="cWho">Tu asistente</div><div class="state"><span class="dot" id="cDot"></span><span id="cState">Conectando…</span> · <span id="cTime">0:00</span></div></div>
+    <div class="hud"><div class="who" id="cWho">Tu asistente</div><div class="state"><span class="dot" id="cDot"></span><span id="cState">Conectando…</span> · <span id="cTime">0:00</span></div><div class="pensando" id="cPiensa" hidden><span class="pz-dots"><i></i><i></i><i></i></span> Pensando… buscando la información</div></div>
     <div class="ficha" id="cFicha" hidden aria-live="polite"></div>
   </div>
   <div class="bar">
@@ -617,7 +623,7 @@ const endCall = async () => {
   clearInterval(tick); tick = null;
   const c = conv; conv = null;
   try { await c?.endSession(); } catch {}
-  $("cState").textContent = "Llamada terminada";
+  $("cState").textContent = "Llamada terminada"; $("cPiensa").hidden = true;
   if (enVc() && vc) await vc.bye();
   vc?.stop();
   cerrarPantalla(); office?.stop(); tvMode = false; stage.classList.remove("tvmode");
@@ -625,7 +631,7 @@ const endCall = async () => {
 };
 // El módulo de voz se carga de antemano para poder desbloquear el sonido en el mismo toque.
 let vozMod = null;
-import("./voz-propia.js?v=7").then((m) => (vozMod = m)).catch(() => {});
+import("./voz-propia.js?v=8").then((m) => (vozMod = m)).catch(() => {});
 $("callBtn").addEventListener("click", async () => {
   const m = $("mCall"); say(m, "");
   // El sonido se desbloquea en este mismo toque (si no, el iPhone no deja que la asistente se escuche).
@@ -643,7 +649,7 @@ $("callBtn").addEventListener("click", async () => {
   else { (await getOffice()).start(); layout(); }
   pendientes(); // se lee el CRM de antemano para que la tele aparezca al tiro
   // Motor de la llamada: el servidor de voz propio de Pulzia (RunPod), con la voz de Camila.
-  const own = await import("./voz-propia.js?v=7").catch(() => null);
+  const own = await import("./voz-propia.js?v=8").catch(() => null);
   const st = own ? await own.voiceStatus(() => user.getIdToken()) : null;
   if (!st?.ready || !(st.left > 0)) {
     endCall();
@@ -677,9 +683,12 @@ $("callBtn").addEventListener("click", async () => {
     onHeard: alEscuchar,
     onAccion: alAccion,
     onMode: (mode) => {
+      $("cPiensa").hidden = mode !== "thinking";
+      // Entre una frase y la siguiente: quieta, sin mover la boca.
+      if (mode === "pausa") { office?.speaking(false); if (enVc()) vc?.listen(); $("cDot").classList.remove("talk"); return; }
       if (mode === "connected") { t0 = Date.now(); tick = setInterval(fmt, 1000); $("cState").textContent = "Encendiendo a " + nombreAsis() + "…"; return; }
       if (mode === "thinking") { $("cState").textContent = "Pensando…"; if (enVc()) vc?.think(); return; }
-      if (mode === "oyendo") { $("cState").textContent = "Te escucho…"; return; }
+      if (mode === "oyendo") { $("cState").textContent = "Te escucho…"; office?.speaking(false); if (enVc()) vc?.listen(); return; }
       if (mode === "despertando") { $("cState").textContent = "Despertando a " + nombreAsis() + "… (puede tardar hasta 1 minuto)"; return; }
       showTalk(mode === "speaking");
     },

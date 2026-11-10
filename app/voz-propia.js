@@ -44,7 +44,7 @@ export async function voiceStatus(getToken) {
 
 export function startOwnVoiceCall({ getToken, crm = "ninguno", pedido, getContexto, onMode, onSubtitle, onHeard, onAccion, onError, onEnd }) {
   let stopped = false, ctx, stream, analyser, rec, chunks = [], speakingSince = 0, silentSince = 0, recording = false;
-  let job = null, queue = [], playing = null, muted = false;
+  let job = null, queue = [], playing = null, muted = false, hablo = false;
   const history = [];
   const LOUD = 0.022, QUIET = 0.012, START_MS = 160, END_MS = 750;
 
@@ -102,14 +102,15 @@ export function startOwnVoiceCall({ getToken, crm = "ninguno", pedido, getContex
     g.gain.value = 1.8; src.buffer = buf; src.connect(g).connect(ctx.destination);
     const h = { pause: () => { try { src.stop(); } catch {} }, play: () => Promise.resolve() };
     src.onended = () => { if (playing === h) { playing = null; playNext(); } };
-    playing = h; src.start();
+    playing = h; onMode?.("speaking"); hablo = true; src.start();
   }
   function playNext() {
-    if (playing || !queue.length) { if (!playing && !queue.length && !job) onMode?.("listening"); return; }
+    // Solo mueve la boca mientras de verdad suena su voz. Si todavía falta la respuesta: "pensando";
+    // si ya habló y viene la siguiente frase, queda quieta escuchando (sin mover la boca).
+    if (playing || !queue.length) { if (!playing && !queue.length) onMode?.(!job ? "listening" : hablo ? "pausa" : "thinking"); return; }
     const part = queue.shift();
     playing = { pause() {}, play: () => Promise.resolve() }; // reservado mientras se decodifica
     const reserva = playing;
-    onMode?.("speaking");
     onSubtitle?.(part.text);
     sonarWebAudio(part, reserva).catch(() => {
       if (playing !== reserva) return; // la interrumpieron mientras tanto
@@ -118,7 +119,7 @@ export function startOwnVoiceCall({ getToken, crm = "ninguno", pedido, getContex
       playing = a;
       a.onended = () => { if (playing === a) playing = null; playNext(); };
       a.onerror = () => { if (playing === a) playing = null; playNext(); };
-      a.play().catch((e) => {
+      a.play().then(() => { if (playing === a) { onMode?.("speaking"); hablo = true; } }).catch((e) => {
         if (e?.name === "NotAllowedError") { bloqueado = true; onError?.("Toca la pantalla para escuchar a tu asistente."); }
         else { playing = null; playNext(); }
       });
@@ -128,6 +129,7 @@ export function startOwnVoiceCall({ getToken, crm = "ninguno", pedido, getContex
   async function sendTurn(blob) {
     const b64 = await new Promise((ok) => { const fr = new FileReader(); fr.onload = () => ok(String(fr.result).split(",")[1] || ""); fr.readAsDataURL(blob); });
     if (!b64 || stopped) return;
+    hablo = false;
     onMode?.("thinking");
     let id;
     try { id = (await api("/voice/turn", { method: "POST", body: JSON.stringify({ audio_b64: b64, history, crm, contexto: (await getContexto?.()) || undefined }) })).id; }
@@ -220,6 +222,7 @@ export function startOwnVoiceCall({ getToken, crm = "ninguno", pedido, getContex
   })();
 
   async function sendTextTurn(text) {
+    hablo = false;
     onMode?.("thinking");
     try {
       const { id } = await api("/voice/turn", { method: "POST", body: JSON.stringify({ text, history, crm, contexto: (await getContexto?.()) || undefined }) });
