@@ -46,7 +46,10 @@ export function startOwnVoiceCall({ getToken, crm = "ninguno", pedido, getContex
   let stopped = false, ctx, stream, analyser, rec, chunks = [], speakingSince = 0, silentSince = 0, recording = false;
   let job = null, queue = [], playing = null, muted = false, hablo = false;
   const history = [];
-  const LOUD = 0.022, QUIET = 0.012, START_MS = 160, END_MS = 750;
+  let LOUD = 0.022, QUIET = 0.012;
+  const START_MS = 250, END_MS = 750;
+  // Ruido del lugar (se mide mientras suena el tono): en un café o la calle se pide más volumen para considerar que la persona habla.
+  let ruido = 0, nRuido = 0;
 
   const api = async (path, init = {}) => {
     const r = await fetch(API + path, { ...init, headers: { "Content-Type": "application/json", Authorization: "Bearer " + (await getToken()) } });
@@ -174,12 +177,15 @@ export function startOwnVoiceCall({ getToken, crm = "ninguno", pedido, getContex
     for (const x of buf) sum += x * x;
     const rms = Math.sqrt(sum / buf.length);
     const now = performance.now();
+    if (!listo) { ruido = (ruido * nRuido + rms) / (nRuido + 1); nRuido = Math.min(nRuido + 1, 600); }
     // Mientras Camila habla se pide más volumen para no confundir su propia voz con la de la persona.
     const loud = rms > (camilaTalking() ? LOUD * 2.2 : LOUD);
     if (!muted && listo && loud) {
       silentSince = 0;
       if (!speakingSince) speakingSince = now;
-      if (!recording && now - speakingSince > START_MS) { if (camilaTalking() || job) stopCamila(); startRec(); }
+      // Si Camila está hablando, la persona la interrumpe. Si Camila está preparando su respuesta (aún no habla), no se le corta:
+      // el ruido del lugar no debe cancelar el saludo ni la respuesta.
+      if (!recording && now - speakingSince > START_MS && (camilaTalking() || !job)) { if (camilaTalking()) stopCamila(); startRec(); }
     } else if (rms < QUIET || muted) {
       speakingSince = 0;
       if (recording) {
@@ -212,6 +218,8 @@ export function startOwnVoiceCall({ getToken, crm = "ninguno", pedido, getContex
       await esperarServidor();
       paraTono();
       if (stopped) return;
+      // Umbrales según el ruido medido durante el tono.
+      if (nRuido > 30) { LOUD = Math.max(0.022, ruido * 3); QUIET = Math.max(0.012, ruido * 1.6); }
       onMode?.("lista");
       listo = true;
       // Saludo inicial: se pide como texto para que Camila salude primero.
