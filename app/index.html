@@ -625,7 +625,7 @@ const endCall = async () => {
 };
 // El módulo de voz se carga de antemano para poder desbloquear el sonido en el mismo toque.
 let vozMod = null;
-import("./voz-propia.js?v=5").then((m) => (vozMod = m)).catch(() => {});
+import("./voz-propia.js?v=6").then((m) => (vozMod = m)).catch(() => {});
 $("callBtn").addEventListener("click", async () => {
   const m = $("mCall"); say(m, "");
   // El sonido se desbloquea en este mismo toque (si no, el iPhone no deja que la asistente se escuche).
@@ -643,7 +643,7 @@ $("callBtn").addEventListener("click", async () => {
   else { (await getOffice()).start(); layout(); }
   pendientes(); // se lee el CRM de antemano para que la tele aparezca al tiro
   // Motor de la llamada: el servidor de voz propio de Pulzia (RunPod), con la voz de Camila.
-  const own = await import("./voz-propia.js?v=5").catch(() => null);
+  const own = await import("./voz-propia.js?v=6").catch(() => null);
   const st = own ? await own.voiceStatus(() => user.getIdToken()) : null;
   if (!st?.ready || !(st.left > 0)) {
     endCall();

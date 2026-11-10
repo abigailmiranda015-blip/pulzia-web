@@ -40,7 +40,7 @@ export function startOwnVoiceCall({ getToken, crm = "ninguno", pedido, getContex
   let stopped = false, ctx, stream, analyser, rec, chunks = [], speakingSince = 0, silentSince = 0, recording = false;
   let job = null, queue = [], playing = null, muted = false;
   const history = [];
-  const LOUD = 0.035, QUIET = 0.018, START_MS = 160, END_MS = 750;
+  const LOUD = 0.022, QUIET = 0.012, START_MS = 160, END_MS = 750;
 
   const api = async (path, init = {}) => {
     const r = await fetch(API + path, { ...init, headers: { "Content-Type": "application/json", Authorization: "Bearer " + (await getToken()) } });
@@ -185,9 +185,16 @@ export function startOwnVoiceCall({ getToken, crm = "ninguno", pedido, getContex
   (async () => {
     try {
       stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } });
-      ctx = ctxDesbloqueado() || new AudioContext();
-      if (ctx.state !== "running") { try { await ctx.resume(); } catch {} }
-      if (ctx.state !== "running") onError?.("Toca la pantalla para que " + "te pueda escuchar.");
+      // En iPhone, al abrir el micrófono el AudioContext creado antes queda "interrumpido":
+      // si no queda corriendo, se crea uno nuevo ahora (con el micrófono abierto el iPhone sí deja encenderlo).
+      ctx = ctxDesbloqueado();
+      if (ctx && ctx.state !== "running") { try { await Promise.race([ctx.resume(), new Promise((r) => setTimeout(r, 800))]); } catch {} }
+      if (!ctx || ctx.state !== "running") {
+        try { ctx?.close(); } catch {}
+        ctx = audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        try { await Promise.race([ctx.resume(), new Promise((r) => setTimeout(r, 800))]); } catch {}
+      }
+      if (ctx.state !== "running") onError?.("Toca la pantalla una vez para activar el sonido.");
       analyser = ctx.createAnalyser();
       analyser.fftSize = 1024;
       ctx.createMediaStreamSource(stream).connect(analyser);
