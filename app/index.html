@@ -685,11 +685,21 @@ $("callBtn").addEventListener("click", async () => {
         (async () => { if (enVc()) (await getVc()).start(); else { (await getOffice()).start(); layout(); } })();
       };
       const asis = nombreAsis() === "tu asistente" ? "Camila" : nombreAsis();
+      let pensando = false, hab = false;
+      const pensar = (on) => {
+        if (on === pensando) return;
+        pensando = on;
+        $("cPiensa").hidden = !on;
+        if (on) { $("cState").textContent = "Pensando…"; if (enVc() && !hab) vc?.think(); }
+        else if (!hab) { if (enVc()) vc?.listen(); $("cState").textContent = "Te escucho"; }
+      };
       conv = await Conversation.startSession({
         agentId: AGENT_ID,
         connectionType: "websocket",
         dynamicVariables: { nombre: (perfilApp.usuario || (user?.displayName || "").split(" ")[0] || "").trim(), asistente: asis, crm: window.__crm || "ninguno" },
-        clientTools: herramientas,
+        // Mientras busca información: cara de pensar y «Pensando… buscando la información».
+        clientTools: Object.fromEntries(Object.entries(herramientas).map(([k, f]) => [k, async (p) => { pensar(true); try { return await f(p); } finally { pensar(false); } }])),
+        onMessage: ({ source }) => { if (source === "user" && contesto) pensar(true); },
         onConnect: () => { t0 = Date.now(); tick = setInterval(fmt, 1000); $("cState").textContent = "Llamando…"; },
         onModeChange: ({ mode }) => { if (mode === "speaking") contestar(); },
         onDisconnect: () => { if (conv) endCall(); },
@@ -698,12 +708,12 @@ $("callBtn").addEventListener("click", async () => {
       setTimeout(contestar, 8000); // por si el saludo se demora, igual aparece
       // Boca sincronizada con el sonido real: mueve la boca solo mientras suena su voz; en las pausas y cuando escucha, quieta.
       const c0 = conv;
-      let hab = false, tOn = 0, tOff = 0;
+      let tOn = 0, tOff = 0;
       const lip = () => {
         if (conv !== c0) return;
         let v = 0; try { v = c0.getOutputVolume(); } catch {}
         const now = performance.now();
-        if (v > 0.02) { tOff = 0; if (!tOn) tOn = now; if (!hab && contesto) { hab = true; showTalk(true); } }
+        if (v > 0.02) { tOff = 0; if (!tOn) tOn = now; if (!hab && contesto) { hab = true; pensar(false); showTalk(true); } }
         else if (v < 0.012) { tOn = 0; if (!tOff) tOff = now; if (hab && now - tOff > 220) { hab = false; showTalk(false); } }
         requestAnimationFrame(lip);
       };
