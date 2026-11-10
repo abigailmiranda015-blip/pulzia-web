@@ -662,14 +662,12 @@ $("callBtn").addEventListener("click", async () => {
   // Motor de la llamada: agente de voz de ElevenLabs (contesta al instante). Con ?motor=propio se usa el servidor propio (RunPod).
   if (new URLSearchParams(location.search).get("motor") !== "propio") {
     // Minutos del plan (prueba: 15 min). Se descuentan también los minutos de estas llamadas; al acabarse se corta y se invita a subir de plan.
-    // (Mientras el servidor no los registre, se llevan en este dispositivo.) La dueña de Pulzia no tiene límite.
+    // Los minutos se guardan en el servidor de Pulzia. La dueña de Pulzia no tiene límite.
     const duena = (user?.email || "").toLowerCase() === "abigailmiranda015@gmail.com";
-    const kMin = "pz-min-" + user.uid + "-" + new Date().toISOString().slice(0, 7);
-    let gastado = 0; try { gastado = Number(localStorage.getItem(kMin)) || 0; } catch {}
-    let quedan = Infinity;
+    let quedan = Infinity, sinGuardar = 0;
     if (!duena) {
       const st = await apiCall("/voice").catch(() => null);
-      quedan = st ? Math.max(0, (st.left ?? 0) - gastado) : Infinity;
+      quedan = st ? Math.max(0, st.left ?? 0) : Infinity;
       if (quedan <= 5) {
         endCall();
         return say(m, st?.plan === "prueba" ? "Se acabaron tus 15 minutos de prueba. Para seguir conversando con tu asistente, sube de plan." : "Se acabaron tus minutos de llamada de este mes. Para seguir conversando, sube de plan.");
@@ -720,9 +718,9 @@ $("callBtn").addEventListener("click", async () => {
       requestAnimationFrame(lip);
       // Cuenta los segundos de la llamada; si se acaban los minutos del plan, corta y avisa.
       const reloj = setInterval(() => {
-        if (conv !== c0) return clearInterval(reloj);
-        gastado++; quedan--;
-        try { localStorage.setItem(kMin, String(gastado)); } catch {}
+        if (conv !== c0) { clearInterval(reloj); if (!duena && sinGuardar) apiCall("/voice/uso", { method: "POST", body: JSON.stringify({ segundos: sinGuardar }) }).catch(() => {}); return; }
+        quedan--; sinGuardar++;
+        if (!duena && (sinGuardar >= 15 || quedan <= 0)) { const n = sinGuardar; sinGuardar = 0; apiCall("/voice/uso", { method: "POST", body: JSON.stringify({ segundos: n }) }).catch(() => {}); }
         if (quedan <= 0) {
           clearInterval(reloj);
           endCall();
