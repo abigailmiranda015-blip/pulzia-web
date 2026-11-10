@@ -18,7 +18,13 @@ function ctxDesbloqueado() {
   } catch {}
   return audioCtx;
 }
+// En iPhone, si el teléfono está en modo silencio, el sonido de la página se apaga.
+// "play-and-record" le dice al iPhone que es una llamada: suena por el parlante aunque esté en silencio.
+function sesionLlamada(tipo) {
+  try { if (navigator.audioSession) navigator.audioSession.type = tipo; } catch {}
+}
 export function unlockAudio() {
+  sesionLlamada("play-and-record");
   ctxDesbloqueado();
   if (!reproductor) reproductor = new Audio();
   reproductor.playsInline = true;
@@ -244,6 +250,7 @@ export function startOwnVoiceCall({ getToken, crm = "ninguno", pedido, getContex
     try { rec?.state === "recording" && rec.stop(); } catch {}
     stream?.getTracks().forEach((t) => t.stop());
     ctx?.suspend?.().catch(() => {});
+    sesionLlamada("auto");
     onEnd?.();
   }
 
