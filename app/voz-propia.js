@@ -135,7 +135,7 @@ export function startOwnVoiceCall({ getToken, crm = "ninguno", pedido, getContex
     hablo = false;
     onMode?.("thinking");
     let id;
-    try { id = (await api("/voice/turn", { method: "POST", body: JSON.stringify({ audio_b64: b64, history, crm, contexto: (await getContexto?.()) || undefined }) })).id; }
+    try { id = (await api("/voice/turn", { method: "POST", body: JSON.stringify({ audio_b64: b64, history, crm, contexto: (await Promise.race([getContexto?.(), new Promise((r) => setTimeout(r, 5000))])) || undefined }) })).id; }
     catch (e) { onMode?.("listening"); return onError?.(e.status === 402 ? "Se acabaron tus minutos de llamada de este mes." : "No pude escucharte bien, ¿me lo repites?"); }
     job = id;
     let heard = "", reply = "";
@@ -261,7 +261,9 @@ export function startOwnVoiceCall({ getToken, crm = "ninguno", pedido, getContex
     hablo = false;
     if (!saludo) onMode?.("thinking");
     try {
-      const { id } = await api("/voice/turn", { method: "POST", body: JSON.stringify({ text, history, crm, contexto: (await getContexto?.()) || undefined }) });
+      // El saludo no necesita los datos del CRM (así no espera a que carguen); el resto, como máximo 5 s.
+      const contexto = saludo ? undefined : (await Promise.race([getContexto?.(), new Promise((r) => setTimeout(r, 5000))])) || undefined;
+      const { id } = await api("/voice/turn", { method: "POST", body: JSON.stringify({ text, history, crm, contexto }) });
       // La instrucción del saludo queda en el historial para que el resto de la llamada la recuerde.
       if (guardar) history.push({ role: "user", content: text });
       job = id;
