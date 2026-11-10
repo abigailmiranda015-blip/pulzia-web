@@ -203,7 +203,7 @@ export function startOwnVoiceCall({ getToken, crm = "ninguno", pedido, getContex
       if (job === id) job = null;
       if (!camilaTalking()) onMode?.("listening");
     } catch (e) {
-      onError?.(e.status === 402 ? "Se acabaron tus minutos de llamada de este mes." : "El servidor de voz se está encendiendo, intenta en unos segundos.");
+      onError?.(e.status === 402 ? "Se acabaron tus minutos de llamada de este mes." : "No pude conectar la voz (" + (e.status || "sin red") + ": " + (e.message || "error") + ").");
       onMode?.("listening");
     }
   }
