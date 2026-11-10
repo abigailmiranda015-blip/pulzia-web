@@ -214,18 +214,20 @@ export function startOwnVoiceCall({ getToken, crm = "ninguno", pedido, getContex
       // Saludo inicial: se pide como texto para que Camila salude primero.
       // Si llamó desde un botón de acceso rápido, se responde eso de inmediato.
       if (pedido) { history.push({ role: "user", content: pedido }); sendTextTurn("(La persona te llamó desde un botón de acceso rápido y te pide: «" + pedido + "». Salúdala muy corto por su nombre y respóndele eso.)"); }
-      else sendTextTurn("(La persona acaba de llamarte. Salúdala como en una llamada entre conocidas, solo con «Hola» + su nombre + «¿cómo estás?», y nada más: no preguntes todavía en qué la ayudas. Cuando te conteste cómo está, respóndele corto (por ejemplo «Bien, gracias») y ahí pregúntale qué necesita. Nunca te despidas si ella no se despidió.)");
+      else sendTextTurn("(La persona acaba de llamarte. Salúdala como en una llamada entre conocidas, solo con «Hola» + su nombre + «¿cómo estás?», y nada más: no preguntes todavía en qué la ayudas. Cuando te conteste cómo está o te pregunte cómo estás tú, responde «Bien, gracias. Cuéntame, ¿qué necesitas?». No digas «perfecto». Nunca te despidas si ella no se despidió.)", true);
     } catch {
       onError?.("No pude usar el micrófono.");
       end();
     }
   })();
 
-  async function sendTextTurn(text) {
+  async function sendTextTurn(text, guardar) {
     hablo = false;
     onMode?.("thinking");
     try {
       const { id } = await api("/voice/turn", { method: "POST", body: JSON.stringify({ text, history, crm, contexto: (await getContexto?.()) || undefined }) });
+      // La instrucción del saludo queda en el historial para que el resto de la llamada la recuerde.
+      if (guardar) history.push({ role: "user", content: text });
       job = id;
       for (let tries = 0; tries < 375 && job === id && !stopped; tries++) {
         await new Promise((r) => setTimeout(r, 400));
