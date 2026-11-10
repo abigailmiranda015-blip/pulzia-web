@@ -208,8 +208,11 @@ export function startOwnVoiceCall({ getToken, crm = "ninguno", pedido, getContex
       ctx.createMediaStreamSource(stream).connect(analyser);
       onMode?.("connected");
       loop();
+      const paraTono = tonoLlamada();
       await esperarServidor();
+      paraTono();
       if (stopped) return;
+      onMode?.("lista");
       listo = true;
       // Saludo inicial: se pide como texto para que Camila salude primero.
       // Si llamó desde un botón de acceso rápido, se responde eso de inmediato.
@@ -220,6 +223,26 @@ export function startOwnVoiceCall({ getToken, crm = "ninguno", pedido, getContex
       end();
     }
   })();
+
+  // Tono de llamada (425 Hz, 1 s sonando y 3 s en silencio, como en Chile) mientras el servidor despierta.
+  // Además confirma que el sonido funciona: si no se escucha, hay que tocar la pantalla.
+  function tonoLlamada() {
+    let parar = false, t = null;
+    const sonar = () => {
+      if (parar || stopped || !ctx || ctx.state === "closed") return;
+      try {
+        const o = ctx.createOscillator(), g = ctx.createGain();
+        o.frequency.value = 425; g.gain.value = 0;
+        o.connect(g).connect(ctx.destination);
+        const n = ctx.currentTime;
+        g.gain.setTargetAtTime(0.12, n, 0.02); g.gain.setTargetAtTime(0, n + 1, 0.02);
+        o.start(n); o.stop(n + 1.2);
+      } catch {}
+      t = setTimeout(sonar, 4000);
+    };
+    sonar();
+    return () => { parar = true; clearTimeout(t); };
+  }
 
   async function sendTextTurn(text, guardar) {
     hablo = false;
