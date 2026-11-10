@@ -37,6 +37,13 @@ button, input { font: inherit; }
 .points .ic { flex: 0 0 34px; height: 34px; border-radius: 10px; display: grid; place-items: center; background: #e3f3ef; color: var(--brand); font-size: 18px; }
 .btn { height: 52px; border-radius: 14px; border: 0; font-weight: 700; font-size: 16px; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 10px; width: 100%; }
 .btn.primary { background: var(--accent); color: #fff; }
+.pl-list { display: grid; gap: 12px; margin: 8px 0 16px; }
+.pl { display: grid; gap: 4px; text-align: left; padding: 16px; border: 1px solid var(--line); border-radius: 16px; background: var(--card); color: var(--ink); font: inherit; cursor: pointer; }
+.pl b { font-size: 18px; }
+.pl .pl-p { font-size: 24px; font-weight: 800; color: var(--accent); }
+.pl .pl-p small { font-size: 13px; font-weight: 600; color: var(--muted); }
+.pl span:last-child { color: var(--muted); font-size: 14px; }
+.pl:active { transform: scale(.99); }
 .btn.ghost { background: transparent; color: var(--ink); border: 2px solid var(--line); }
 .btn.google { background: var(--google); color: #1f2430; border: 1px solid #d6dbd9; }
 .btn:focus-visible, input:focus-visible, a:focus-visible { outline: 3px solid var(--glow); outline-offset: 2px; }
@@ -337,6 +344,7 @@ h2 { margin: 0; font-size: 22px; }
   </header>
   <div class="body">
     <p class="muted" style="text-align:left" id="fuPlan">Cargando…</p>
+    <button class="btn ghost" type="button" data-go="planes">Ver planes</button>
     <p class="muted" style="text-align:left">Marca los tableros que tu asistente puede revisar. Si quieres, dale permiso para hacer cambios en alguno (solo cuando tú se lo pidas; nunca borra nada). Toca «columnas» para esconder datos que no quieras que vea, como costos o márgenes.</p>
     <div id="fuList" class="fu-list"></div>
     <h3 class="fu-h">Correo</h3>
@@ -362,6 +370,19 @@ h2 { margin: 0; font-size: 22px; }
 </section>
 
 <!-- Conectar Cami con Claude (cuando la persona agrega el conector de Pulzia en su Claude) -->
+<section class="screen" id="planes" hidden>
+  <header class="top small"><h2>Elige tu plan</h2></header>
+  <div class="body">
+    <p class="muted" style="text-align:left" id="plMsg">Sigue conversando con tu asistente. Pagas mes a mes con Mercado Pago y cancelas cuando quieras.</p>
+    <div class="pl-list" id="plList">
+      <button class="pl" type="button" data-plan="basico"><b>Básico</b><span class="pl-p">$9.990<small>/mes</small></span><span>30 minutos de llamada al mes · chat ilimitado · 1 fuente de datos</span></button>
+      <button class="pl" type="button" data-plan="medio"><b>Medio</b><span class="pl-p">$19.990<small>/mes</small></span><span>90 minutos de llamada al mes · chat ilimitado · 3 fuentes de datos</span></button>
+      <button class="pl" type="button" data-plan="empresa"><b>Empresa</b><span class="pl-p">$39.990<small>/mes</small></span><span>240 minutos de llamada al mes · chat ilimitado · 10 fuentes de datos</span></button>
+    </div>
+    <p class="msg" id="mPl" hidden></p>
+    <button class="btn ghost" type="button" data-go="home">Volver</button>
+  </div>
+</section>
 <section class="screen" id="claude" hidden>
   <header class="top small">
     <div class="desk small"><video src="office/trabaja-pp.mp4" poster="office/poster.jpg" autoplay muted loop playsinline aria-hidden="true"></video></div>
@@ -653,6 +674,24 @@ async function estadoPrueba() {
   return { vencida, plan: "prueba", st, quedan: Math.max(0, Math.min(st.left ?? 0, PRUEBA_SEG - (st.used || 0))) };
 }
 const MSG_FIN_PRUEBA = "Tu prueba gratis de 3 días terminó. Para seguir usando a tu asistente, elige un plan.";
+// Pantalla de planes (pago mensual con Mercado Pago).
+const verPlanes = (motivo) => { if (motivo) $("plMsg").textContent = motivo + " Pagas mes a mes con Mercado Pago y cancelas cuando quieras."; say($("mPl"), ""); go("planes"); };
+document.querySelectorAll("#plList .pl").forEach((b) => b.addEventListener("click", async () => {
+  const m = $("mPl"); say(m, "Abriendo Mercado Pago…", true);
+  try {
+    const { url } = await apiCall("/pago/crear", { method: "POST", body: JSON.stringify({ plan: b.dataset.plan }) });
+    location.href = url;
+  } catch (e) { say(m, e.message === "error" ? "No se pudo abrir el pago. Prueba de nuevo en un momento." : e.message); }
+}));
+// Al volver de Mercado Pago se revisa el pago y se activa el plan.
+async function revisarPagoAlVolver() {
+  if (!/[?&]pago=/.test(location.search)) return;
+  history.replaceState(null, "", location.pathname + location.hash);
+  try {
+    const r = await apiCall("/pago/estado");
+    say($("mCall"), r.activo ? "¡Listo! Tu plan quedó activo. Gracias 💚" : "Tu pago está en revisión. Apenas Mercado Pago lo confirme, tu plan se activa solo.", !!r.activo);
+  } catch {}
+}
 $("callBtn").addEventListener("click", async () => {
   const m = $("mCall"); say(m, "");
   // El sonido se desbloquea en este mismo toque (si no, el iPhone no deja que la asistente se escuche).
@@ -679,11 +718,11 @@ $("callBtn").addEventListener("click", async () => {
     let quedan = Infinity, sinGuardar = 0;
     if (!duena) {
       const ep = await estadoPrueba();
-      if (ep.vencida) { endCall(); return say(m, MSG_FIN_PRUEBA); }
+      if (ep.vencida) { endCall(); return verPlanes("Tu prueba gratis de 3 días terminó."); }
       quedan = ep.plan === "prueba" ? ep.quedan : ep.st ? Math.max(0, ep.st.left ?? 0) : Infinity;
       if (quedan <= 5) {
         endCall();
-        return say(m, ep.plan === "prueba" ? "Se acabaron tus 5 minutos de llamada de prueba. Para seguir conversando con tu asistente, elige un plan." : "Se acabaron tus minutos de llamada de este mes. Para seguir conversando, sube de plan.");
+        return verPlanes(ep.plan === "prueba" ? "Se acabaron tus 5 minutos de llamada de prueba." : "Se acabaron tus minutos de llamada de este mes.");
       }
     }
     try {
@@ -737,7 +776,7 @@ $("callBtn").addEventListener("click", async () => {
         if (quedan <= 0) {
           clearInterval(reloj);
           endCall();
-          say(m, "Se acabaron los minutos de tu plan. Para seguir conversando con tu asistente, sube de plan.");
+          verPlanes("Se acabaron los minutos de tu plan.");
         }
       }, 1000);
       return;
@@ -949,7 +988,7 @@ $("chatForm").addEventListener("submit", async (e) => {
   e.preventDefault();
   const t = $("chatTxt").value.trim(); if (!t) return;
   $("chatTxt").value = ""; burbuja("yo", t);
-  if ((await estadoPrueba()).vencida) { burbuja("ella", MSG_FIN_PRUEBA); return; }
+  if ((await estadoPrueba()).vencida) { burbuja("ella", MSG_FIN_PRUEBA); setTimeout(() => verPlanes("Tu prueba gratis de 3 días terminó."), 1500); return; }
   const est = burbuja("est", "Escribiendo…");
   try {
     const { id } = await apiCall("/chat", { method: "POST", body: JSON.stringify({ text: t }) });
@@ -1285,6 +1324,7 @@ onAuthStateChanged(auth, (user) => {
   if (user) {
     $("hello").textContent = "¡Hola, " + ((user.displayName || "").split(" ")[0] || "bienvenida") + "!";
     if (mcpPend()) showMcp(); else window.__go?.("home");
+    revisarPagoAlVolver();
     Promise.all([finishCrm().then(refreshCrm), refreshWa(), refreshPerfil()]).then(pintarPasos);
   } else if (!document.getElementById("home").hidden) window.__go?.("welcome");
 });
