@@ -10,7 +10,7 @@ export function createVideoCall(box, base = "videollamada/") {
   const vids = {};
   for (const [k, f] of Object.entries(FILES)) {
     const v = document.createElement("video");
-    v.src = base + f;
+    v.src = base + f + "?v=2";
     v.muted = true;
     v.playsInline = true;
     v.setAttribute("playsinline", "");
