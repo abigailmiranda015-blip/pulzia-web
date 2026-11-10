@@ -52,13 +52,16 @@ export function startOwnVoiceCall({ getToken, crm = "ninguno", pedido, getContex
   // El servidor de voz se apaga solo cuando no se usa y tarda ~50 s en despertar: se espera a que esté listo antes de saludar y de escuchar.
   let listo = false;
   async function esperarServidor() {
+    // Máximo ~75 s esperando: si el servidor no avisa que está listo, igual se saluda (el pedido queda en fila).
+    const hasta = Date.now() + 75000;
     try {
       onSubtitle?.("Despertando a tu asistente, un momento…");
-      const { id } = await api("/voice/warm", { method: "POST", body: "{}" });
-      if (!id) return;
-      for (let i = 0; i < 60 && !stopped; i++) {
-        const r = await api("/voice/warm/" + id).catch(() => ({}));
-        if (r.ready || ["FAILED", "CANCELLED", "TIMED_OUT"].includes(r.status)) return;
+      onMode?.("despertando");
+      const w = await api("/voice/warm", { method: "POST", body: "{}" });
+      if (!w?.id) return;
+      while (!stopped && Date.now() < hasta) {
+        const r = await api("/voice/warm/" + w.id).catch(() => ({}));
+        if (r.ready || r.done || ["COMPLETED", "FAILED", "CANCELLED", "TIMED_OUT"].includes(r.status)) return;
         await new Promise((ok) => setTimeout(ok, 2000));
       }
     } catch {}
@@ -104,7 +107,7 @@ export function startOwnVoiceCall({ getToken, crm = "ninguno", pedido, getContex
     catch (e) { onMode?.("listening"); return onError?.(e.status === 402 ? "Se acabaron tus minutos de llamada de este mes." : "No pude escucharte bien, ¿me lo repites?"); }
     job = id;
     let heard = "", reply = "";
-    for (let tries = 0; tries < 200 && job === id && !stopped; tries++) {
+    for (let tries = 0; tries < 375 && job === id && !stopped; tries++) {
       await new Promise((r) => setTimeout(r, tries < 10 ? 250 : 400));
       let s;
       try { s = await api("/voice/stream/" + id); } catch { continue; }
@@ -187,7 +190,7 @@ export function startOwnVoiceCall({ getToken, crm = "ninguno", pedido, getContex
     try {
       const { id } = await api("/voice/turn", { method: "POST", body: JSON.stringify({ text, history, crm, contexto: (await getContexto?.()) || undefined }) });
       job = id;
-      for (let tries = 0; tries < 200 && job === id && !stopped; tries++) {
+      for (let tries = 0; tries < 375 && job === id && !stopped; tries++) {
         await new Promise((r) => setTimeout(r, 400));
         const s = await api("/voice/stream/" + id).catch(() => ({}));
         for (const it of s.items || []) {
