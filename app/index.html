@@ -663,6 +663,7 @@ const endCall = async () => {
 let vozMod = null;
 import("./voz-propia.js?v=14").then((m) => (vozMod = m)).catch(() => {});
 // Prueba gratis: 3 días desde que se crea la cuenta y máximo 5 minutos de voz. La dueña de Pulzia no tiene límite.
+const MSG_NO_DISP = "Tu asistente no está disponible en este momento. Prueba de nuevo en unos minutos.";
 const PRUEBA_DIAS = 3, PRUEBA_SEG = 300;
 const esDuena = () => (auth.currentUser?.email || "").toLowerCase() === "abigailmiranda015@gmail.com";
 async function estadoPrueba() {
@@ -752,7 +753,7 @@ $("callBtn").addEventListener("click", async () => {
         onMessage: ({ source }) => { if (source === "user" && contesto) pensar(true); },
         onConnect: () => { t0 = Date.now(); tick = setInterval(fmt, 1000); $("cState").textContent = "Llamando…"; },
         onModeChange: ({ mode }) => { if (mode === "speaking") contestar(); },
-        onDisconnect: () => { if (conv) endCall(); },
+        onDisconnect: () => { if (!conv) return; const sinContestar = !contesto; endCall(); if (sinContestar) say(m, MSG_NO_DISP); },
         onError: () => { $("cState").textContent = "Se cortó la conexión"; },
       });
       setTimeout(contestar, 8000); // por si el saludo se demora, igual aparece
@@ -780,7 +781,7 @@ $("callBtn").addEventListener("click", async () => {
         }
       }, 1000);
       return;
-    } catch (err) { console.log("eleven", err); }
+    } catch (err) { console.log("eleven", err); conv = null; endCall(); return say(m, MSG_NO_DISP); }
   }
   // Motor de respaldo: el servidor de voz propio de Pulzia (RunPod), con la voz de Camila.
   const own = await import("./voz-propia.js?v=14").catch(() => null);
