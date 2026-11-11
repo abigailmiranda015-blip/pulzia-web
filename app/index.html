@@ -937,11 +937,14 @@ async function refreshPerfil() {
   try { perfilApp = { asistente: "", atajos: [], ...(await apiCall("/perfil")) }; } catch {}
   pintarAtajos();
 }
-$("atajos").addEventListener("click", (e) => {
+$("atajos").addEventListener("click", async (e) => {
   const b = e.target.closest("button"); if (!b) return;
   const lista = perfilApp.atajos?.length ? perfilApp.atajos : ATAJOS_BASE;
-  window.__pedido = lista[Number(b.dataset.i)];
-  $("callBtn").click();
+  // Los botones se responden por escrito: abren el chat y mandan la pregunta. Ella solo habla en la llamada.
+  const pregunta = lista[Number(b.dataset.i)];
+  await abrirChat();
+  $("chatTxt").value = pregunta;
+  $("chatForm").requestSubmit();
 });
 const filaAt = (t = "") => `<div class="at-row"><input maxlength="80" value="${escH(t)}" placeholder="Ej.: ¿Qué se me está acabando?"><button type="button" aria-label="Quitar">×</button></div>`;
 $("atEdit").addEventListener("click", () => {
@@ -1030,7 +1033,7 @@ $("chatForm").addEventListener("submit", async (e) => {
         let fin = false;
         for (const it of s.items || []) {
           if (it.type === "heard") { heard = it.text; est.remove(); if (heard) yoB = burbuja("yo", "🎤 " + heard); else { burbuja("est", "No te escuché bien. Intenta de nuevo, un poco más cerca."); fin = true; } }
-          else if (it.type === "audio") { cola.push(it); siguiente(); }
+          else if (it.type === "audio") { /* solo responde por escrito; la voz es solo en la llamada */ }
           else if (it.type === "reply") reply = it.text;
           else if (it.type === "done") fin = true;
         }
