@@ -723,7 +723,7 @@ $("callBtn").addEventListener("click", async () => {
       quedan = ep.plan === "prueba" ? ep.quedan : ep.st ? Math.max(0, ep.st.left ?? 0) : Infinity;
       if (quedan <= 5) {
         endCall();
-        return verPlanes(ep.plan === "prueba" ? "Se acabaron tus 5 minutos de llamada de prueba." : "Se acabaron tus minutos de llamada de este mes.");
+        return verPlanes(ep.plan === "prueba" ? "Se acabaron tus créditos de llamada de prueba." : "Se acabaron tus créditos de llamada de este mes.");
       }
     }
     try {
@@ -753,7 +753,7 @@ $("callBtn").addEventListener("click", async () => {
         onMessage: ({ source }) => { if (source === "user" && contesto) pensar(true); },
         onConnect: () => { t0 = Date.now(); tick = setInterval(fmt, 1000); $("cState").textContent = "Llamando…"; },
         onModeChange: ({ mode }) => { if (mode === "speaking") contestar(); },
-        onDisconnect: () => { if (!conv) return; const sinContestar = !contesto; endCall(); if (sinContestar) say(m, MSG_NO_DISP); },
+        onDisconnect: () => { if (!conv) return; const sinContestar = !contesto, largo = t0 && Date.now() - t0 >= 285000; endCall(); if (sinContestar) say(m, MSG_NO_DISP); else if (largo && !duena) verPlanes("Se acabaron tus créditos de llamada."); },
         onError: () => { $("cState").textContent = "Se cortó la conexión"; },
       });
       setTimeout(contestar, 8000); // por si el saludo se demora, igual aparece
@@ -777,7 +777,7 @@ $("callBtn").addEventListener("click", async () => {
         if (quedan <= 0) {
           clearInterval(reloj);
           endCall();
-          verPlanes("Se acabaron los minutos de tu plan.");
+          verPlanes("Se acabaron tus créditos de llamada.");
         }
       }, 1000);
       return;
@@ -788,7 +788,7 @@ $("callBtn").addEventListener("click", async () => {
   const st = own ? await own.voiceStatus(() => user.getIdToken()) : null;
   if (!st?.ready || !(st.left > 0)) {
     endCall();
-    return say(m, !st ? "No se pudo conectar la llamada. Revisa tu internet y prueba de nuevo." : st.left > 0 ? "Las llamadas todavía no están disponibles. Prueba en un rato." : st.plan === "prueba" ? "Se acabaron tus 5 minutos de llamada de prueba. Elige un plan para seguir llamando." : "Se acabaron tus minutos de llamada de este mes.");
+    return say(m, !st ? "No se pudo conectar la llamada. Revisa tu internet y prueba de nuevo." : st.left > 0 ? "Las llamadas todavía no están disponibles. Prueba en un rato." : st.plan === "prueba" ? "Se acabaron tus 5 minutos de llamada de prueba. Elige un plan para seguir llamando." : "Se acabaron tus créditos de llamada de este mes.");
   }
   // Si la persona lo pide con palabras claras, la tele o la ficha se muestran aunque Camila no ponga la marca.
   let marcado = false;
