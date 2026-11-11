@@ -210,13 +210,13 @@ h2 { margin: 0; font-size: 22px; }
   <header class="top">
     <div class="desk"><video src="office/trabaja-pp.mp4" poster="office/poster.jpg" autoplay muted loop playsinline aria-label="La asistente de Pulzia trabajando en su escritorio"></video></div>
     <h1 class="brand">Pulzia <span>AI</span></h1>
-    <p class="tag">Tu asistente que te ayuda a ti y a tu equipo a trabajar en monday</p>
+    <p class="tag">Tu asistente personal que se conecta con tus herramientas y te ayuda a ordenar tu trabajo</p>
   </header>
   <div class="body">
     <ul class="points">
       <li><span class="ic" aria-hidden="true">💬</span><span><b>Pregúntale cómo vamos</b>Te cuenta lo importante de cada etapa y te lo muestra en pantalla.</span></li>
       <li><span class="ic" aria-hidden="true">🎙️</span><span><b>Háblale como a una compañera</b>Le hablas o le escribes, y te responde con voz.</span></li>
-      <li><span class="ic" aria-hidden="true">✅</span><span><b>Tú apruebas cada cambio</b>Antes de tocar tu monday, te pide permiso. Nunca borra nada.</span></li>
+      <li><span class="ic" aria-hidden="true">✅</span><span><b>Tú apruebas cada cambio</b>Antes de cambiar algo en tus herramientas, te pide permiso. Nunca borra nada.</span></li>
     </ul>
     <button class="btn primary" type="button" data-go="signup">Crear cuenta gratis</button>
     <button class="btn ghost" type="button" data-go="login">Ya tengo cuenta</button>
@@ -317,8 +317,8 @@ h2 { margin: 0; font-size: 22px; }
         <button class="btn call-btn" type="button" id="atSave">Guardar</button>
         <p class="msg" id="mAt" hidden></p>
       </div>
-      <p class="muted" style="text-align:left">Conecta tu CRM para que tu asistente vea tus clientes y ventas. Funciona con monday, y pronto con otros.</p>
-      <button class="btn ghost" type="button" id="crmBtn">Conectar mi CRM (monday)</button>
+      <p class="muted" style="text-align:left">Conecta tus herramientas para que tu asistente vea tus clientes y ventas.</p>
+      <button class="btn ghost" type="button" id="crmBtn">Conectar mis herramientas</button>
       <p class="msg wz" id="mCrm" hidden></p>
       <button class="btn ghost" type="button" id="fuBtn">Lo que sabe tu asistente</button>
       <p class="muted" style="text-align:left" id="waTxt" hidden>Habla con Cami también por WhatsApp: recordatorios y respuestas rápidas sobre tus pendientes.</p>
@@ -864,7 +864,7 @@ async function refreshCrm() {
     const on = soloCrm.find((c) => c.connected) || (just && Date.now() - just.at < 5 * 60e3 ? crms.find((c) => c.id === just.id) : null);
     crmName = on ? on.name : "ninguno";
     window.__crm = crmName;
-    $("crmBtn").textContent = on ? "✓ " + on.name + " conectado (tocar para desconectar)" : "Conectar mi CRM (monday)";
+    $("crmBtn").textContent = on ? "✓ " + on.name + " conectado (tocar para desconectar)" : "Conectar mis herramientas";
     $("crmBtn").dataset.on = on ? on.id : "";
   } catch {}
 }
@@ -875,7 +875,7 @@ $("crmBtn").addEventListener("click", async () => {
     if (b.dataset.on) {
       try { localStorage.removeItem("pulzia_crm_just"); } catch {}
       await apiCall("/crm/" + b.dataset.on, { method: "DELETE" });
-      b.textContent = "Conectar mi CRM (monday)"; b.dataset.on = ""; window.__crm = "ninguno";
+      b.textContent = "Conectar mis herramientas"; b.dataset.on = ""; window.__crm = "ninguno";
       return say(m, "Se desconectó tu CRM.", true);
     }
     const { url } = await apiCall("/crm/monday/connect", { method: "POST" });
