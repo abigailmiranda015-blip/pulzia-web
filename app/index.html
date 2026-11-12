@@ -117,6 +117,9 @@ input { height: 50px; border-radius: 12px; border: 2px solid var(--line); backgr
 .link-btn { background: none; border: 0; color: var(--accent); font: inherit; font-size: 14px; padding: 2px; cursor: pointer; align-self: flex-end; }
 .at-edit { display: grid; gap: 8px; padding: 12px; border: 1px solid var(--line); border-radius: 14px; background: var(--card); }
 .crm-otro { display: grid; gap: 8px; }
+.api-box { display: grid; gap: 10px; text-align: left; }
+.api-box label { display: grid; gap: 4px; font-weight: 600; font-size: 14px; }
+.api-box input, .api-box textarea { font: inherit; font-weight: 400; padding: 10px; border: 1px solid var(--line); border-radius: 10px; background: var(--card); color: var(--ink); min-width: 0; resize: vertical; }
 .cl-box { display: grid; gap: 8px; text-align: left; font-size: 14px; }
 .cl-box ol { margin: 0; padding-left: 20px; display: grid; gap: 6px; }
 .cl-url { display: flex; gap: 8px; align-items: center; }
@@ -394,6 +397,19 @@ h2 { margin: 0; font-size: 22px; }
     <label class="btn ghost fu-up">+ Subir archivos<input type="file" id="docIn" multiple accept=".pdf,.doc,.docx,.xls,.xlsx,.csv,.txt,.md,image/*" hidden></label>
     <div id="docList" class="fu-list"></div>
     <p class="msg" id="mDoc" hidden></p>
+    <h3 class="fu-h">Tu sistema por API (ERP u otro)</h3>
+    <p class="muted" style="text-align:left;margin:0">Si tu sistema (ERP, CRM, inventario) tiene API, conéctalo tú mismo: tu asistente lee esos datos para responderte. Solo lee; nunca cambia nada. Cuenta como 1 fuente.</p>
+    <button class="btn ghost" type="button" id="apiBtn">+ Conectar por API</button>
+    <div id="apiBox" class="api-box" hidden>
+      <label>Nombre del sistema<input id="apiName" maxlength="60" placeholder="Ej: Mi ERP"></label>
+      <label>Direcciones de la API (una por línea, con https://)<textarea id="apiUrls" rows="3" placeholder="https://api.misistema.com/v1/clientes&#10;https://api.misistema.com/v1/ventas"></textarea></label>
+      <label>Encabezado de la clave<input id="apiHead" maxlength="60" value="Authorization"></label>
+      <label>Clave o token de la API<input id="apiKey" type="password" autocomplete="off" placeholder="Ej: Bearer abc123…"></label>
+      <p class="muted" style="text-align:left;margin:0">Revisa la documentación de tu sistema: ahí dice qué direcciones usar y cómo va la clave. Tu clave se guarda protegida y no se muestra de nuevo.</p>
+      <button class="btn call-btn" type="button" id="apiSave">Conectar</button>
+      <p class="muted" style="text-align:left;margin:0">¿No sabes cómo? Escríbenos a <b>soporte@pulzia.app</b> y te ayudamos a conectarlo.</p>
+    </div>
+    <p class="msg" id="mApi" hidden></p>
     <button class="btn call-btn" type="button" id="fuSave">Guardar</button>
     <button class="btn ghost" type="button" id="fuBack">Volver</button>
     <p class="msg" id="mFu" hidden></p>
@@ -1319,7 +1335,7 @@ let leyendoDocs = false;
 async function leerPendientes(docs) {
   if (leyendoDocs) return; leyendoDocs = true;
   try {
-    for (const d of docs.filter((x) => !x.chars && !(x.type || "").startsWith("image/")).slice(0, 5)) {
+    for (const d of docs.filter((x) => !x.chars && !x.api && !(x.type || "").startsWith("image/")).slice(0, 5)) {
       try {
         const r = await fetch(API + "/docs/" + d.id + "/archivo", { headers: { Authorization: "Bearer " + (await auth.currentUser.getIdToken()) } });
         if (!r.ok) continue;
@@ -1333,7 +1349,7 @@ async function cargarDocs() {
   try {
     const r = await apiCall("/docs");
     leerPendientes(r.docs).then(() => {});
-    $("docList").innerHTML = r.docs.length ? r.docs.map((d) => `<div class="doc-r" data-id="${escH(d.id)}"><span>${escH(d.name)} <small>· ${Math.max(1, Math.round(d.size / 1024))} KB${d.chars ? "" : " · sin texto"}</small></span><button type="button">Quitar</button></div>`).join("") : '<p class="muted" style="margin:0">Todavía no subes archivos.</p>';
+    $("docList").innerHTML = r.docs.length ? r.docs.map((d) => (d.api ? `<div class="doc-r" data-id="${escH(d.id)}"><span>${escH(d.name)} <small>· leída ${new Date(d.at).toLocaleString("es-CL", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}</small></span><span style="display:flex;gap:6px"><button type="button" data-act="upd">Actualizar</button><button type="button">Quitar</button></span></div>` : `<div class="doc-r" data-id="${escH(d.id)}"><span>${escH(d.name)} <small>· ${Math.max(1, Math.round(d.size / 1024))} KB${d.chars ? "" : " · sin texto"}</small></span><button type="button">Quitar</button></div>`)).join("") : '<p class="muted" style="margin:0">Todavía no subes archivos.</p>';
   } catch { $("docList").innerHTML = ""; }
 }
 $("docIn").addEventListener("change", async (e) => {
@@ -1371,8 +1387,28 @@ $("chatFile").addEventListener("change", async (e) => {
 });
 $("docList").addEventListener("click", async (e) => {
   const row = e.target.closest(".doc-r"); if (!row || e.target.tagName !== "BUTTON") return;
+  if (e.target.dataset.act === "upd") {
+    e.target.textContent = "Leyendo…";
+    try { await apiCall("/docs/" + row.dataset.id + "/actualizar", { method: "POST" }); say($("mApi"), "Listo, tu asistente ya tiene los datos al día.", true); }
+    catch (err) { say($("mApi"), err.message || "No se pudo actualizar."); }
+    return cargarDocs();
+  }
   try { await apiCall("/docs/" + row.dataset.id, { method: "DELETE" }); } catch {}
   cargarDocs(); showFuentesPlan();
+});
+$("apiBtn").addEventListener("click", () => { $("apiBox").hidden = !$("apiBox").hidden; if (!$("apiBox").hidden) $("apiName").focus(); });
+$("apiSave").addEventListener("click", async () => {
+  const m = $("mApi"), b = $("apiSave");
+  const urls = $("apiUrls").value.trim();
+  if (!urls) return say(m, "Escribe al menos una dirección de la API.");
+  b.disabled = true; say(m, "Conectando y leyendo tus datos…", true);
+  try {
+    await apiCall("/docs/api", { method: "POST", body: JSON.stringify({ name: $("apiName").value.trim(), urls, header: $("apiHead").value.trim(), key: $("apiKey").value }) });
+    $("apiKey").value = ""; $("apiBox").hidden = true;
+    say(m, "¡Listo! Tu asistente ya puede leer los datos de tu sistema. Pregúntale por ellos.", true);
+    cargarDocs(); showFuentesPlan();
+  } catch (err) { say(m, err.message || "No se pudo conectar. Revisa las direcciones y la clave."); }
+  finally { b.disabled = false; }
 });
 async function showFuentesPlan() {
   try {
