@@ -38,6 +38,9 @@ button, input { font: inherit; }
 .btn { height: 52px; border-radius: 14px; border: 0; font-weight: 700; font-size: 16px; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 10px; width: 100%; }
 .btn.primary { background: var(--accent); color: #fff; }
 .pl-list { display: grid; gap: 12px; margin: 8px 0 16px; }
+.sl-list { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin: 10px 0 16px; }
+.sl-list .pl { padding: 12px 8px; text-align: center; justify-items: center; }
+.sl-list .pl .pl-p { font-size: 19px; }
 .pl { display: grid; gap: 4px; text-align: left; padding: 16px; border: 1px solid var(--line); border-radius: 16px; background: var(--card); color: var(--ink); font: inherit; cursor: pointer; }
 .pl b { font-size: 18px; }
 .pl .pl-p { font-size: 24px; font-weight: 800; color: var(--accent); }
@@ -384,9 +387,16 @@ h2 { margin: 0; font-size: 22px; }
   <div class="body">
     <p class="muted" style="text-align:left" id="plMsg">Sigue conversando con tu asistente. Pagas mes a mes con Mercado Pago y cancelas cuando quieras.</p>
     <div class="pl-list" id="plList">
-      <button class="pl" type="button" data-plan="basico"><b>Básico</b><span class="pl-p">$9.990<small>/mes</small></span><span>10 minutos de llamada al mes · chat ilimitado · 1 fuente de datos</span></button>
-      <button class="pl" type="button" data-plan="medio"><b>Medio</b><span class="pl-p">$19.990<small>/mes</small></span><span>30 minutos de llamada al mes · chat ilimitado · 3 fuentes de datos</span></button>
-      <button class="pl" type="button" data-plan="empresa"><b>Empresa</b><span class="pl-p">$39.990<small>/mes</small></span><span>80 minutos de llamada al mes · chat ilimitado · 10 fuentes de datos</span></button>
+      <button class="pl" type="button" data-plan="basico"><b>Básico</b><span class="pl-p">$9.990<small>/mes</small></span><span>5 minutos de llamada incluidos · chat ilimitado · 1 fuente de datos</span></button>
+      <button class="pl" type="button" data-plan="medio"><b>Medio</b><span class="pl-p">$19.990<small>/mes</small></span><span>15 minutos de llamada incluidos · chat ilimitado · 3 fuentes de datos</span></button>
+      <button class="pl" type="button" data-plan="empresa"><b>Empresa</b><span class="pl-p">$39.990<small>/mes</small></span><span>40 minutos de llamada incluidos · chat ilimitado · 10 fuentes de datos</span></button>
+    </div>
+    <h3 style="margin:8px 0 0;text-align:left">Saldo de llamadas</h3>
+    <p class="muted" style="text-align:left;margin:4px 0 0" id="slInfo">Recarga cuando quieras: tu saldo no vence y se usa cuando se acaban los minutos de tu plan. Cada minuto cuesta $250.</p>
+    <div class="sl-list" id="slList">
+      <button class="pl" type="button" data-monto="5000"><span class="pl-p">$5.000</span><span>20 minutos</span></button>
+      <button class="pl" type="button" data-monto="10000"><span class="pl-p">$10.000</span><span>40 minutos</span></button>
+      <button class="pl" type="button" data-monto="20000"><span class="pl-p">$20.000</span><span>80 minutos</span></button>
     </div>
     <p class="msg" id="mPl" hidden></p>
     <button class="btn ghost" type="button" data-go="home">Volver</button>
@@ -674,18 +684,33 @@ import("./voz-propia.js?v=14").then((m) => (vozMod = m)).catch(() => {});
 // Prueba gratis: 3 días desde que se crea la cuenta y máximo 5 minutos de voz. La dueña de Pulzia no tiene límite.
 const MSG_NO_DISP = "Tu asistente no está disponible en este momento. Prueba de nuevo en unos minutos.";
 const PRUEBA_DIAS = 3, PRUEBA_SEG = 300;
+const MSG_SIN_MIN = "Se acabaron tus minutos de llamada. Recarga saldo para seguir llamando.";
 const esDuena = () => (auth.currentUser?.email || "").toLowerCase() === "abigailmiranda015@gmail.com";
 async function estadoPrueba() {
   if (esDuena()) return { vencida: false, plan: "empresa" };
   const st = await apiCall("/voice").catch(() => null);
   if (!st || st.plan !== "prueba") return { vencida: false, plan: st?.plan, st };
   const alta = Date.parse(auth.currentUser?.metadata?.creationTime || "") || Date.now();
-  const vencida = Date.now() - alta > PRUEBA_DIAS * 864e5;
-  return { vencida, plan: "prueba", st, quedan: Math.max(0, Math.min(st.left ?? 0, PRUEBA_SEG - (st.used || 0))) };
+  const segSaldo = st.segSaldo || 0; // quien recargó saldo puede seguir llamando aunque termine la prueba
+  const vencida = !segSaldo && Date.now() - alta > PRUEBA_DIAS * 864e5;
+  return { vencida, plan: "prueba", st, quedan: Math.max(0, Math.min(st.planLeft ?? st.left ?? 0, PRUEBA_SEG - (st.used || 0))) + segSaldo };
 }
 const MSG_FIN_PRUEBA = "Tu prueba gratis de 3 días terminó. Para seguir usando a tu asistente, elige un plan.";
 // Pantalla de planes (pago mensual con Mercado Pago).
-const verPlanes = (motivo) => { if (motivo) $("plMsg").textContent = motivo + " Pagas mes a mes con Mercado Pago y cancelas cuando quieras."; say($("mPl"), ""); go("planes"); };
+const SL_TXT = "Recarga cuando quieras: tu saldo no vence y se usa cuando se acaban los minutos de tu plan. Cada minuto cuesta $250.";
+const pesos = (n) => "$" + Math.round(n).toLocaleString("es-CL");
+const verPlanes = (motivo) => {
+  $("plMsg").textContent = (motivo ? motivo + " " : "") + "Los planes se pagan mes a mes con Mercado Pago y cancelas cuando quieras.";
+  say($("mPl"), ""); go("planes");
+  apiCall("/voice").then((st) => { if (st && typeof st.saldo === "number") $("slInfo").textContent = "Tu saldo: " + pesos(st.saldo) + " (unos " + Math.floor(st.segSaldo / 60) + " minutos). " + SL_TXT; }).catch(() => {});
+};
+document.querySelectorAll("#slList .pl").forEach((b) => b.addEventListener("click", async () => {
+  const m = $("mPl"); say(m, "Abriendo Mercado Pago…", true);
+  try {
+    const { url } = await apiCall("/pago/recarga", { method: "POST", body: JSON.stringify({ monto: Number(b.dataset.monto) }) });
+    location.href = url;
+  } catch (e) { say(m, e.message === "error" ? "No se pudo abrir el pago. Prueba de nuevo en un momento." : e.message); }
+}));
 document.querySelectorAll("#plList .pl").forEach((b) => b.addEventListener("click", async () => {
   const m = $("mPl"); say(m, "Abriendo Mercado Pago…", true);
   try {
@@ -695,6 +720,17 @@ document.querySelectorAll("#plList .pl").forEach((b) => b.addEventListener("clic
 }));
 // Al volver de Mercado Pago se revisa el pago y se activa el plan.
 async function revisarPagoAlVolver() {
+  const q = new URLSearchParams(location.search);
+  if (q.get("recarga")) {
+    history.replaceState(null, "", location.pathname + location.hash);
+    const pid = q.get("payment_id") || q.get("collection_id");
+    if (q.get("recarga") === "error") return say($("mCall"), "La recarga no se completó. Puedes intentarlo de nuevo cuando quieras.");
+    try {
+      const r = pid ? await apiCall("/pago/confirmar", { method: "POST", body: JSON.stringify({ payment_id: pid }) }) : {};
+      say($("mCall"), r.ok ? "¡Listo! Tu saldo de llamadas quedó en " + pesos(r.saldo) + ". Gracias 💚" : "Tu pago está en revisión. Apenas Mercado Pago lo confirme, tu saldo se carga solo.", !!r.ok);
+    } catch {}
+    return;
+  }
   if (!/[?&]pago=/.test(location.search)) return;
   history.replaceState(null, "", location.pathname + location.hash);
   try {
@@ -732,7 +768,7 @@ $("callBtn").addEventListener("click", async () => {
       quedan = ep.plan === "prueba" ? ep.quedan : ep.st ? Math.max(0, ep.st.left ?? 0) : Infinity;
       if (quedan <= 5) {
         endCall();
-        return verPlanes(ep.plan === "prueba" ? "Se acabaron tus créditos de llamada de prueba." : "Se acabaron tus créditos de llamada de este mes.");
+        return verPlanes(MSG_SIN_MIN);
       }
     }
     try {
@@ -762,7 +798,7 @@ $("callBtn").addEventListener("click", async () => {
         onMessage: ({ source }) => { if (source === "user" && contesto) pensar(true); },
         onConnect: () => { t0 = Date.now(); tick = setInterval(fmt, 1000); $("cState").textContent = "Llamando…"; },
         onModeChange: ({ mode }) => { if (mode === "speaking") contestar(); },
-        onDisconnect: () => { if (!conv) return; const sinContestar = !contesto, largo = t0 && Date.now() - t0 >= 285000; endCall(); if (sinContestar) say(m, MSG_NO_DISP); else if (largo && !duena) verPlanes("Se acabaron tus créditos de llamada."); },
+        onDisconnect: () => { if (!conv) return; const sinContestar = !contesto, sinMin = quedan <= 5; endCall(); if (sinContestar) say(m, MSG_NO_DISP); else if (sinMin && !duena) verPlanes(MSG_SIN_MIN); },
         onError: () => { $("cState").textContent = "Se cortó la conexión"; },
       });
       setTimeout(contestar, 8000); // por si el saludo se demora, igual aparece
@@ -786,7 +822,7 @@ $("callBtn").addEventListener("click", async () => {
         if (quedan <= 0) {
           clearInterval(reloj);
           endCall();
-          verPlanes("Se acabaron tus créditos de llamada.");
+          verPlanes(MSG_SIN_MIN);
         }
       }, 1000);
       return;
