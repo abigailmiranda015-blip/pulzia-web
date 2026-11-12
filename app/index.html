@@ -325,7 +325,9 @@ h2 { margin: 0; font-size: 22px; }
         <button type="button" class="pl" disabled style="opacity:.55"><span>HubSpot</span><span class="pl-p">Pronto</span></button>
         <button type="button" class="pl" disabled style="opacity:.55"><span>Pipedrive</span><span class="pl-p">Pronto</span></button>
         <button type="button" class="pl" disabled style="opacity:.55"><span>Zoho CRM</span><span class="pl-p">Pronto</span></button>
+        <a class="pl" id="crmOtro" href="mailto:soporte@pulzia.app?subject=Quiero%20conectar%20mi%20CRM&body=Mi%20CRM%20es%3A%20" style="text-decoration:none;color:inherit"><span>Otro CRM</span><span class="pl-p">Consultar</span></a>
       </div>
+      <p class="muted" id="crmOtroTxt" style="text-align:left" hidden>¿Usas otro? Escríbenos a soporte@pulzia.app y te avisamos cuando esté listo.</p>
       <p class="msg wz" id="mCrm" hidden></p>
       <button class="btn ghost" type="button" id="fuBtn">Lo que sabe tu asistente</button>
       <p class="muted" style="text-align:left" id="waTxt" hidden>Habla con Cami también por WhatsApp: recordatorios y respuestas rápidas sobre tus pendientes.</p>
@@ -885,7 +887,7 @@ $("crmBtn").addEventListener("click", async () => {
       b.textContent = "Conectar mi CRM"; b.dataset.on = ""; window.__crm = "ninguno";
       return say(m, "Se desconectó tu CRM.", true);
     }
-    $("crmPick").hidden = !$("crmPick").hidden; // elegir cuál CRM conectar
+    $("crmPick").hidden = !$("crmPick").hidden; $("crmOtroTxt").hidden = $("crmPick").hidden; // elegir cuál CRM conectar
   } catch { say(m, "No se pudo desconectar. Prueba de nuevo en un momento."); }
 });
 $("crmPick").addEventListener("click", async (e) => {
