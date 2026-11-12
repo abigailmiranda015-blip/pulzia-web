@@ -361,7 +361,7 @@ h2 { margin: 0; font-size: 22px; }
       <p class="muted" style="margin:0" id="mailTxt">Conecta tu correo para que tu asistente te avise de correos nuevos y te deje respuestas listas.</p>
       <button class="btn ghost" type="button" id="mailBtn">Conectar Outlook</button>
       <div id="mailPerm" hidden style="display:grid;gap:6px">
-        <label class="fu-ed" style="margin:0"><input type="checkbox" id="mAvisar"> Avisarme por WhatsApp cuando llegue un correo</label>
+        <label class="fu-ed" style="margin:0" hidden><input type="checkbox" id="mAvisar"> Avisarme por WhatsApp cuando llegue un correo</label>
         <label class="fu-ed" style="margin:0"><input type="checkbox" id="mBorr"> Dejar respuestas en borradores para que yo las envíe</label>
         <label class="fu-ed" style="margin:0"><input type="checkbox" id="mEnv"> Enviar correos por mí (siempre me pregunta antes)</label>
       </div>
@@ -1157,7 +1157,7 @@ async function cargarCorreo() {
     $("mailBtn").dataset.on = r.conectado ? "1" : "";
     $("mailBtn").textContent = r.conectado ? "✓ Outlook conectado (tocar para desconectar)" : "Conectar Outlook";
     $("mailPerm").hidden = !r.conectado;
-    $("mAvisar").checked = r.cfg.avisar; $("mBorr").checked = r.cfg.borrador; $("mEnv").checked = r.cfg.enviar;
+    $("mAvisar").checked = false; $("mBorr").checked = r.cfg.borrador; $("mEnv").checked = r.cfg.enviar;
   } catch { $("mailBox").hidden = true; }
 }
 $("mailBtn").addEventListener("click", async () => {
@@ -1170,7 +1170,7 @@ $("mailBtn").addEventListener("click", async () => {
 });
 $("mailPerm").addEventListener("change", async () => {
   try {
-    await apiCall("/correo", { method: "POST", body: JSON.stringify({ avisar: $("mAvisar").checked, borrador: $("mBorr").checked, enviar: $("mEnv").checked }) });
+    await apiCall("/correo", { method: "POST", body: JSON.stringify({ avisar: false, borrador: $("mBorr").checked, enviar: $("mEnv").checked }) });
     say($("mMail"), "Guardado.", true);
   } catch { say($("mMail"), "No se pudo guardar."); }
 });
