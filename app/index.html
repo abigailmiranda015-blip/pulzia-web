@@ -317,8 +317,15 @@ h2 { margin: 0; font-size: 22px; }
         <button class="btn call-btn" type="button" id="atSave">Guardar</button>
         <p class="msg" id="mAt" hidden></p>
       </div>
-      <p class="muted" style="text-align:left">Conecta tus herramientas para que tu asistente vea tus clientes y ventas.</p>
-      <button class="btn ghost" type="button" id="crmBtn">Conectar mis herramientas</button>
+      <p class="muted" style="text-align:left">Conecta tu CRM para que tu asistente vea tus clientes y ventas.</p>
+      <button class="btn ghost" type="button" id="crmBtn">Conectar mi CRM</button>
+      <div class="pl-list" id="crmPick" hidden>
+        <button type="button" class="pl" data-crm="monday"><span>monday</span><span class="pl-p">Conectar</span></button>
+        <button type="button" class="pl" disabled style="opacity:.55"><span>Google Sheets</span><span class="pl-p">Pronto</span></button>
+        <button type="button" class="pl" disabled style="opacity:.55"><span>HubSpot</span><span class="pl-p">Pronto</span></button>
+        <button type="button" class="pl" disabled style="opacity:.55"><span>Pipedrive</span><span class="pl-p">Pronto</span></button>
+        <button type="button" class="pl" disabled style="opacity:.55"><span>Zoho CRM</span><span class="pl-p">Pronto</span></button>
+      </div>
       <p class="msg wz" id="mCrm" hidden></p>
       <button class="btn ghost" type="button" id="fuBtn">Lo que sabe tu asistente</button>
       <p class="muted" style="text-align:left" id="waTxt" hidden>Habla con Cami también por WhatsApp: recordatorios y respuestas rápidas sobre tus pendientes.</p>
@@ -864,7 +871,7 @@ async function refreshCrm() {
     const on = soloCrm.find((c) => c.connected) || (just && Date.now() - just.at < 5 * 60e3 ? crms.find((c) => c.id === just.id) : null);
     crmName = on ? on.name : "ninguno";
     window.__crm = crmName;
-    $("crmBtn").textContent = on ? "✓ " + on.name + " conectado (tocar para desconectar)" : "Conectar mis herramientas";
+    $("crmBtn").textContent = on ? "✓ " + on.name + " conectado (tocar para desconectar)" : "Conectar mi CRM";
     $("crmBtn").dataset.on = on ? on.id : "";
   } catch {}
 }
@@ -875,12 +882,16 @@ $("crmBtn").addEventListener("click", async () => {
     if (b.dataset.on) {
       try { localStorage.removeItem("pulzia_crm_just"); } catch {}
       await apiCall("/crm/" + b.dataset.on, { method: "DELETE" });
-      b.textContent = "Conectar mis herramientas"; b.dataset.on = ""; window.__crm = "ninguno";
+      b.textContent = "Conectar mi CRM"; b.dataset.on = ""; window.__crm = "ninguno";
       return say(m, "Se desconectó tu CRM.", true);
     }
-    const { url } = await apiCall("/crm/monday/connect", { method: "POST" });
-    location.href = url;
-  } catch { say(m, "No se pudo conectar. Prueba de nuevo en un momento."); }
+    $("crmPick").hidden = !$("crmPick").hidden; // elegir cuál CRM conectar
+  } catch { say(m, "No se pudo desconectar. Prueba de nuevo en un momento."); }
+});
+$("crmPick").addEventListener("click", async (e) => {
+  const c = e.target.closest("button[data-crm]"); if (!c) return;
+  try { const { url } = await apiCall("/crm/" + c.dataset.crm + "/connect", { method: "POST" }); location.href = url; }
+  catch { say($("mCrm"), "No se pudo conectar. Prueba de nuevo en un momento."); }
 });
 // Primeros pasos: hasta que el asistente tenga de dónde sacar información, se muestran arriba en vez de los botones.
 let tieneDocs = false;
