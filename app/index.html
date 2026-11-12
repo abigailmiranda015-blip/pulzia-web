@@ -690,10 +690,10 @@ import("./voz-propia.js?v=14").then((m) => (vozMod = m)).catch(() => {});
 // Prueba gratis: 3 días desde que se crea la cuenta y máximo 5 minutos de voz. La dueña de Pulzia no tiene límite.
 const MSG_NO_DISP = "Tu asistente no está disponible en este momento. Prueba de nuevo en unos minutos.";
 const PRUEBA_DIAS = 3, PRUEBA_SEG = 300;
-// Llamadas pausadas mientras se prueban: solo la dueña de Pulzia ve el botón. Para activarlas para todos, poner true.
+// Llamadas pausadas mientras se prueban: nadie ve el botón (la dueña lo ve solo con ?llamar=1). Para activarlas para todos, poner true.
 const LLAMADAS_ACTIVAS = false;
 function aplicarLlamadas() {
-  const on = LLAMADAS_ACTIVAS || esDuena();
+  const on = LLAMADAS_ACTIVAS || (esDuena() && /[?&]llamar=1/.test(location.search)); // la dueña puede probar con ?llamar=1
   $("callBtn").hidden = !on;
   $("chatBtn").classList.toggle("ghost", on); $("chatBtn").classList.toggle("call-btn", !on);
   $("slSec").hidden = !LLAMADAS_ACTIVAS;
