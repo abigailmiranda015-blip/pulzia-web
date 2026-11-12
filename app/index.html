@@ -116,6 +116,11 @@ input { height: 50px; border-radius: 12px; border: 2px solid var(--line); backgr
 .link-btn { background: none; border: 0; color: var(--accent); font: inherit; font-size: 14px; padding: 2px; cursor: pointer; align-self: flex-end; }
 .at-edit { display: grid; gap: 8px; padding: 12px; border: 1px solid var(--line); border-radius: 14px; background: var(--card); }
 .crm-otro { display: grid; gap: 8px; }
+.cl-box { display: grid; gap: 8px; text-align: left; font-size: 14px; }
+.cl-box ol { margin: 0; padding-left: 20px; display: grid; gap: 6px; }
+.cl-url { display: flex; gap: 8px; align-items: center; }
+.cl-url code { flex: 1; min-width: 0; overflow-wrap: anywhere; padding: 10px; border: 1px solid var(--line); border-radius: 10px; font-size: 12px; }
+.cl-url .btn { width: auto; padding: 10px 14px; }
 .crm-otro input { font: inherit; padding: 12px; border: 1px solid var(--line); border-radius: 12px; background: var(--card); color: var(--ink); min-width: 0; }
 .at-l { display: grid; gap: 4px; text-align: left; font-weight: 600; font-size: 14px; }
 .at-l input, .at-row input { font: inherit; padding: 10px; border: 1px solid var(--line); border-radius: 10px; min-width: 0; }
@@ -347,6 +352,19 @@ h2 { margin: 0; font-size: 22px; }
       <p class="muted" style="text-align:left" id="waTxt" hidden>Habla con tu asistente también por WhatsApp: recordatorios y respuestas rápidas sobre tus pendientes.</p>
       <button class="btn ghost" type="button" id="waBtn" hidden>Conectar WhatsApp</button>
       <p class="msg wz" id="mWa" hidden></p>
+      <p class="muted" style="text-align:left">Para trabajos grandes (documentos, informes, planillas, análisis), usa tu asistente desde tu propio Claude.</p>
+      <button class="btn ghost" type="button" id="clBtn">Usar mi asistente desde Claude</button>
+      <div class="cl-box" id="clBox" hidden>
+        <ol>
+          <li>Abre <b>claude.ai</b> → Ajustes → <b>Conectores</b> → <b>Agregar conector personalizado</b>.</li>
+          <li>Ponle de nombre <b>Pulzia</b> y pega esta dirección:</li>
+        </ol>
+        <div class="cl-url"><code id="clUrl">https://pulzia-api.abigailmiranda015.workers.dev/mcp</code><button class="btn ghost" type="button" id="clCopy">Copiar</button></div>
+        <ol start="3">
+          <li>Toca <b>Conectar</b>, entra con tu cuenta de Pulzia y aprueba.</li>
+        </ol>
+        <p class="muted" style="text-align:left;margin:0">Claude verá tus pendientes, clientes y fichas (solo lectura). Se usa con tu propio plan de Claude.</p>
+      </div>
       <button class="btn ghost" type="button" id="logout">Cerrar sesión</button>
     </div>
   </div>
@@ -971,6 +989,13 @@ $("crmPick").addEventListener("click", async (e) => {
   const c = e.target.closest("button[data-crm]"); if (!c) return;
   try { const { url } = await apiCall("/crm/" + c.dataset.crm + "/connect", { method: "POST" }); location.href = url; }
   catch { say($("mCrm"), "No se pudo conectar. Prueba de nuevo en un momento."); }
+});
+// Usar el asistente desde el Claude propio de la persona (trabajos grandes, con sus propios créditos).
+$("clBtn").addEventListener("click", () => { $("clBox").hidden = !$("clBox").hidden; });
+$("clCopy").addEventListener("click", async () => {
+  const t = $("clUrl").textContent;
+  try { await navigator.clipboard.writeText(t); $("clCopy").textContent = "✓ Copiada"; }
+  catch { const r = document.createRange(); r.selectNodeContents($("clUrl")); const sel = getSelection(); sel.removeAllRanges(); sel.addRange(r); }
 });
 // Primeros pasos: hasta que el asistente tenga de dónde sacar información, se muestran arriba en vez de los botones.
 let tieneDocs = false;
