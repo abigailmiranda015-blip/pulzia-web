@@ -331,7 +331,7 @@ h2 { margin: 0; font-size: 22px; }
       <p class="msg wz" id="mCrm" hidden></p>
       <button class="btn ghost" type="button" id="fuBtn">Lo que sabe tu asistente</button>
       <p class="muted" style="text-align:left" id="waTxt" hidden>Habla con Cami también por WhatsApp: recordatorios y respuestas rápidas sobre tus pendientes.</p>
-      <button class="btn ghost" type="button" id="waBtn" hidden>Vincular WhatsApp</button>
+      <button class="btn ghost" type="button" id="waBtn" hidden>Conectar WhatsApp</button>
       <p class="msg wz" id="mWa" hidden></p>
       <button class="btn ghost" type="button" id="logout">Cerrar sesión</button>
     </div>
@@ -1285,7 +1285,7 @@ async function refreshWa() {
   try {
     const w = await apiCall("/wa");
     $("waBtn").dataset.on = w.linked ? "1" : "";
-    $("waBtn").textContent = w.linked ? "✓ WhatsApp vinculado " + w.phone + " (tocar para desvincular)" : "Vincular WhatsApp";
+    $("waBtn").textContent = w.linked ? "✓ WhatsApp vinculado " + w.phone + " (tocar para desvincular)" : "Conectar WhatsApp";
     $("waBtn").hidden = $("waTxt").hidden = !w.ready && !w.linked;
   } catch { $("waBtn").hidden = $("waTxt").hidden = true; }
 }
@@ -1295,8 +1295,19 @@ $("waBtn").addEventListener("click", async () => {
     if ($("waBtn").dataset.on) { await apiCall("/wa", { method: "DELETE" }); await refreshWa(); return say(m, "Se desvinculó tu WhatsApp.", true); }
     const { code, number } = await apiCall("/wa/link", { method: "POST" });
     const n = String(number || "").replace(/\D/g, "");
-    m.innerHTML = 'Manda este código por WhatsApp a Cami: <b>' + code + '</b><br><a href="https://wa.me/' + n + '?text=' + encodeURIComponent(code) + '" target="_blank" rel="noopener">Abrir WhatsApp con el código</a> (vence en 30 minutos).';
+    const quien = nombreAsis() === "tu asistente" ? "Cami" : nombreAsis();
+    m.innerHTML = '<b>Para vincular tu WhatsApp, 2 pasos:</b><br>1. Toca el botón verde. Se abre WhatsApp con un mensaje ya escrito.<br>2. Toca <b>enviar</b> en WhatsApp. No cambies nada del mensaje.<br><br>' +
+      '<a class="btn call-btn" style="display:block;text-align:center;text-decoration:none" href="https://wa.me/' + n + '?text=' + encodeURIComponent(code) + '" target="_blank" rel="noopener">Abrir WhatsApp y enviar</a>' +
+      '<br><span class="muted">Después vuelve aquí: te avisamos cuando ' + quien + ' ya esté vinculada. El código (' + code + ') vence en 30 minutos.</span>';
     m.hidden = false; m.classList.add("ok");
+    // Un solo toque: abre WhatsApp directo con el mensaje listo; la persona solo toca enviar.
+    setTimeout(() => { location.href = "https://wa.me/" + n + "?text=" + encodeURIComponent(code); }, 400);
+    // Espera a que la persona mande el mensaje y avisa cuando quedó vinculado.
+    let vueltas = 0;
+    const espera = setInterval(async () => {
+      if (++vueltas > 200) return clearInterval(espera);
+      try { const w = await apiCall("/wa"); if (w.linked) { clearInterval(espera); await refreshWa(); say(m, "✓ Listo, tu WhatsApp quedó vinculado. " + quien + " te escribió por ahí.", true); pintarPasos?.(); } } catch {}
+    }, 3000);
   } catch { say(m, "No se pudo vincular ahora. Prueba en un rato."); }
 });
 let crmDone = false;
