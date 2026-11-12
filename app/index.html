@@ -992,6 +992,7 @@ function burbuja(quien, texto, archivos = []) {
 }
 async function abrirChat() {
   window.__go?.("chat");
+  apiCall("/voice/warm").catch(() => {}); // despierta el servidor del asistente mientras la persona escribe, para que el primer mensaje no demore tanto
   $("chatWho").textContent = perfilApp.asistente || "Tu asistente";
   $("chatLog").innerHTML = "";
   try { const { history } = await apiCall("/chat"); history.forEach((h) => burbuja(h.role === "user" ? "yo" : "ella", h.content)); } catch {}
