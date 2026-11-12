@@ -115,6 +115,8 @@ input { height: 50px; border-radius: 12px; border: 2px solid var(--line); backgr
 .atajos button:active { background: #e8f3f0; }
 .link-btn { background: none; border: 0; color: var(--accent); font: inherit; font-size: 14px; padding: 2px; cursor: pointer; align-self: flex-end; }
 .at-edit { display: grid; gap: 8px; padding: 12px; border: 1px solid var(--line); border-radius: 14px; background: var(--card); }
+.crm-otro { display: grid; gap: 8px; }
+.crm-otro input { font: inherit; padding: 12px; border: 1px solid var(--line); border-radius: 12px; background: var(--card); color: var(--ink); min-width: 0; }
 .at-l { display: grid; gap: 4px; text-align: left; font-weight: 600; font-size: 14px; }
 .at-l input, .at-row input { font: inherit; padding: 10px; border: 1px solid var(--line); border-radius: 10px; min-width: 0; }
 .at-list { display: grid; gap: 6px; }
@@ -326,13 +328,20 @@ h2 { margin: 0; font-size: 22px; }
       <button class="btn ghost" type="button" id="crmBtn">Conectar mi CRM</button>
       <div class="pl-list" id="crmPick" hidden>
         <button type="button" class="pl" data-crm="monday"><span>monday</span><span class="pl-p">Conectar</span></button>
-        <button type="button" class="pl" disabled style="opacity:.55"><span>Google Sheets</span><span class="pl-p">Pronto</span></button>
-        <button type="button" class="pl" disabled style="opacity:.55"><span>HubSpot</span><span class="pl-p">Pronto</span></button>
-        <button type="button" class="pl" disabled style="opacity:.55"><span>Pipedrive</span><span class="pl-p">Pronto</span></button>
-        <button type="button" class="pl" disabled style="opacity:.55"><span>Zoho CRM</span><span class="pl-p">Pronto</span></button>
-        <a class="pl" id="crmOtro" href="mailto:soporte@pulzia.app?subject=Quiero%20conectar%20mi%20CRM&body=Mi%20CRM%20es%3A%20" style="text-decoration:none;color:inherit"><span>Otro CRM</span><span class="pl-p">Consultar</span></a>
+        <button type="button" class="pl" data-pedir="HubSpot"><span>HubSpot</span><span class="pl-p">Consultar</span></button>
+        <button type="button" class="pl" data-pedir="Salesforce"><span>Salesforce</span><span class="pl-p">Consultar</span></button>
+        <button type="button" class="pl" data-pedir="Pipedrive"><span>Pipedrive</span><span class="pl-p">Consultar</span></button>
+        <button type="button" class="pl" data-pedir="Zoho CRM"><span>Zoho CRM</span><span class="pl-p">Consultar</span></button>
+        <button type="button" class="pl" data-pedir="Bitrix24"><span>Bitrix24</span><span class="pl-p">Consultar</span></button>
+        <button type="button" class="pl" data-pedir="Odoo"><span>Odoo</span><span class="pl-p">Consultar</span></button>
+        <button type="button" class="pl" data-pedir="Google Sheets"><span>Google Sheets</span><span class="pl-p">Consultar</span></button>
+        <button type="button" class="pl" id="crmOtro"><span>Otro CRM</span><span class="pl-p">Escribir cuál</span></button>
+        <div class="crm-otro" id="crmOtroBox" hidden>
+          <input id="crmOtroIn" maxlength="80" placeholder="¿Qué CRM usas? Ej: Kommo, Clientify…">
+          <button class="btn call-btn" type="button" id="crmOtroBtn">Consultar</button>
+        </div>
       </div>
-      <p class="muted" id="crmOtroTxt" style="text-align:left" hidden>¿Usas otro? Escríbenos a soporte@pulzia.app y te avisamos cuando esté listo.</p>
+      <p class="muted" id="crmOtroTxt" style="text-align:left" hidden>Hoy se conecta monday. Si usas otro, toca «Consultar» y vemos contigo cómo conectarlo.</p>
       <p class="msg wz" id="mCrm" hidden></p>
       <button class="btn ghost" type="button" id="fuBtn">Lo que sabe tu asistente</button>
       <p class="muted" style="text-align:left" id="waTxt" hidden>Habla con tu asistente también por WhatsApp: recordatorios y respuestas rápidas sobre tus pendientes.</p>
@@ -941,7 +950,24 @@ $("crmBtn").addEventListener("click", async () => {
     $("crmPick").hidden = !$("crmPick").hidden; $("crmOtroTxt").hidden = $("crmPick").hidden; // elegir cuál CRM conectar
   } catch { say(m, "No se pudo desconectar. Prueba de nuevo en un momento."); }
 });
+// CRM que todavía no está: queda anotado en Pulzia y se abre un correo a soporte para ver cómo conectarlo.
+async function pedirCrm(nombre) {
+  const m = $("mCrm");
+  try { await apiCall("/crm/pedido", { method: "POST", body: JSON.stringify({ crm: nombre }) }); } catch {}
+  const correo = auth.currentUser?.email || "";
+  location.href = "mailto:soporte@pulzia.app?subject=" + encodeURIComponent("Quiero conectar " + nombre + " a Pulzia") +
+    "&body=" + encodeURIComponent("Hola, uso " + nombre + " y me gustaría conectarlo a mi asistente de Pulzia.\n\nMi cuenta: " + correo + "\n\n");
+  say(m, "Listo, anotamos que usas " + nombre + ". Te escribiremos a tu correo para conectarlo. Si no se abrió tu correo, escríbenos a soporte@pulzia.app.", true);
+}
+$("crmOtro").addEventListener("click", () => { $("crmOtroBox").hidden = false; $("crmOtroIn").focus(); });
+$("crmOtroBtn").addEventListener("click", () => {
+  const n = $("crmOtroIn").value.trim();
+  if (!n) { $("crmOtroIn").focus(); return say($("mCrm"), "Escribe el nombre de tu CRM."); }
+  pedirCrm(n);
+});
+$("crmOtroIn").addEventListener("keydown", (e) => { if (e.key === "Enter") $("crmOtroBtn").click(); });
 $("crmPick").addEventListener("click", async (e) => {
+  const q = e.target.closest("button[data-pedir]"); if (q) return pedirCrm(q.dataset.pedir);
   const c = e.target.closest("button[data-crm]"); if (!c) return;
   try { const { url } = await apiCall("/crm/" + c.dataset.crm + "/connect", { method: "POST" }); location.href = url; }
   catch { say($("mCrm"), "No se pudo conectar. Prueba de nuevo en un momento."); }
