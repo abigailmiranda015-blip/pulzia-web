@@ -25,6 +25,8 @@ button, input { font: inherit; }
 .desk video.r { opacity: 0; }
 .desk video.r.on { opacity: 1; }
 .desk.small { width: min(100%, 260px); border-radius: 14px; }
+.desk.vcw { width: min(62%, 240px); aspect-ratio: 3 / 4; border-radius: 22px; background: #0b1312 url(videollamada/poster.jpg) center 20%/cover no-repeat; }
+.desk.vcw video { object-position: center 20%; }
 .ring { width: clamp(132px, 34vw, 190px); aspect-ratio: 1; border-radius: 50%; padding: 5px; background: conic-gradient(from 200deg, var(--glow), #ffffff55, var(--glow)); box-shadow: 0 12px 30px rgba(0,0,0,.25); }
 .ring img { width: 100%; height: 100%; border-radius: 50%; object-fit: cover; display: block; border: 3px solid rgba(255,255,255,.4); }
 .brand { font-size: 30px; font-weight: 800; letter-spacing: -.01em; margin: 0; }
@@ -211,14 +213,14 @@ h2 { margin: 0; font-size: 22px; }
 <!-- 1. Bienvenida -->
 <section class="screen" id="welcome">
   <header class="top">
-    <div class="desk"><video src="office/trabaja-pp.mp4" poster="office/poster.jpg" autoplay muted loop playsinline aria-label="La asistente de Pulzia trabajando en su escritorio"></video></div>
+    <div class="desk vcw"><video id="wVid" src="videollamada/saludo.mp4" poster="videollamada/poster.jpg" autoplay muted playsinline aria-label="La asistente de Pulzia saludándote"></video></div>
     <h1 class="brand">Pulzia <span>AI</span></h1>
     <p class="tag">Tu asistente personal: se conecta a tu CRM o a tus herramientas de trabajo y te cuenta cómo va tu negocio</p>
   </header>
   <div class="body">
     <ul class="points">
       <li><span class="ic" aria-hidden="true">💬</span><span><b>Conéctala a lo que ya usas</b>Tu CRM, un Excel o Google Drive. Ella lee tus clientes y ventas y te dice qué hay pendiente y a quién llamar hoy.</span></li>
-      <li><span class="ic" aria-hidden="true">🎙️</span><span><b>Llámala, escríbele o usa WhatsApp</b>La llamas y conversan hablando, o le escribes y te responde por escrito, también por WhatsApp.</span></li>
+      <li><span class="ic" aria-hidden="true">🎙️</span><span id="ptCanal"><b>Escríbele o mándale audios</b>Le escribes o le mandas una nota de voz, en la app o por WhatsApp, y te responde tranquila: por escrito o con su voz. Muy pronto también podrás llamarla.</span></li>
       <li><span class="ic" aria-hidden="true">✅</span><span><b>Tú apruebas cada cambio</b>Antes de cambiar algo en tus herramientas, te pide permiso. Nunca borra nada.</span></li>
     </ul>
     <button class="btn primary" type="button" data-go="signup">Crear cuenta gratis</button>
@@ -391,12 +393,14 @@ h2 { margin: 0; font-size: 22px; }
       <button class="pl" type="button" data-plan="medio"><b>Medio</b><span class="pl-p">$19.990<small>/mes</small></span><span>15 minutos de llamada incluidos · chat ilimitado · 3 fuentes de datos</span></button>
       <button class="pl" type="button" data-plan="empresa"><b>Empresa</b><span class="pl-p">$39.990<small>/mes</small></span><span>40 minutos de llamada incluidos · chat ilimitado · 10 fuentes de datos</span></button>
     </div>
+    <div id="slSec">
     <h3 style="margin:8px 0 0;text-align:left">Saldo de llamadas</h3>
     <p class="muted" style="text-align:left;margin:4px 0 0" id="slInfo">Recarga cuando quieras: tu saldo no vence y se usa cuando se acaban los minutos de tu plan. Cada minuto cuesta $250.</p>
     <div class="sl-list" id="slList">
       <button class="pl" type="button" data-monto="5000"><span class="pl-p">$5.000</span><span>20 minutos</span></button>
       <button class="pl" type="button" data-monto="10000"><span class="pl-p">$10.000</span><span>40 minutos</span></button>
       <button class="pl" type="button" data-monto="20000"><span class="pl-p">$20.000</span><span>80 minutos</span></button>
+    </div>
     </div>
     <p class="msg" id="mPl" hidden></p>
     <button class="btn ghost" type="button" data-go="home">Volver</button>
@@ -439,6 +443,8 @@ document.querySelectorAll(".desk video:not(.r)").forEach((v) => {
   v.addEventListener("playing", on);
   if (!v.paused && v.readyState > 2) on();
 });
+// Bienvenida: la asistente saluda y después se queda conversando (videos de la videollamada).
+document.getElementById("wVid")?.addEventListener("ended", (e) => { const v = e.target; v.src = "videollamada/habla.mp4"; v.loop = true; v.play().catch(() => {}); }, { once: true });
 document.addEventListener("pointerdown", () => document.querySelectorAll(".screen:not([hidden]) .desk video:not(.r)").forEach((v) => v.paused && v.play().catch(() => {})), { passive: true });
 // Navegación entre pantallas. El inicio de sesión real (correo y Google) se conecta en el siguiente paso.
 const go = (window.__go = (id) => {
@@ -684,6 +690,15 @@ import("./voz-propia.js?v=14").then((m) => (vozMod = m)).catch(() => {});
 // Prueba gratis: 3 días desde que se crea la cuenta y máximo 5 minutos de voz. La dueña de Pulzia no tiene límite.
 const MSG_NO_DISP = "Tu asistente no está disponible en este momento. Prueba de nuevo en unos minutos.";
 const PRUEBA_DIAS = 3, PRUEBA_SEG = 300;
+// Llamadas pausadas mientras se prueban: solo la dueña de Pulzia ve el botón. Para activarlas para todos, poner true.
+const LLAMADAS_ACTIVAS = false;
+function aplicarLlamadas() {
+  const on = LLAMADAS_ACTIVAS || esDuena();
+  $("callBtn").hidden = !on;
+  $("chatBtn").classList.toggle("ghost", on); $("chatBtn").classList.toggle("call-btn", !on);
+  $("slSec").hidden = !LLAMADAS_ACTIVAS;
+  document.querySelectorAll("#plList .pl > span:last-child").forEach((x) => { if (!LLAMADAS_ACTIVAS) x.textContent = x.textContent.replace(/^\d+ minutos de llamada incluidos · /, "") + " · llamadas muy pronto"; });
+}
 const MSG_SIN_MIN = "Se acabaron tus minutos de llamada. Recarga saldo para seguir llamando.";
 const esDuena = () => (auth.currentUser?.email || "").toLowerCase() === "abigailmiranda015@gmail.com";
 async function estadoPrueba() {
@@ -1066,7 +1081,7 @@ $("chatForm").addEventListener("submit", async (e) => {
     const est = burbuja("est", "Escuchándote…");
     try {
       const b64 = await new Promise((ok) => { const fr = new FileReader(); fr.onload = () => ok(String(fr.result).split(",")[1] || ""); fr.readAsDataURL(blob); });
-      const { id } = await apiCall("/voice/turn", { method: "POST", body: JSON.stringify({ audio_b64: b64, history: hist(), crm: window.__crm || "ninguno", contexto: (await pendientes())?.texto || undefined }) });
+      const { id } = await apiCall("/voice/turn", { method: "POST", body: JSON.stringify({ nota: true, audio_b64: b64, history: hist(), crm: window.__crm || "ninguno", contexto: (await pendientes())?.texto || undefined }) });
       const cola = []; let sonando = false, heard = "", reply = "", yoB = null, ellaB = null;
       const siguiente = () => {
         if (sonando || !cola.length) return;
@@ -1083,7 +1098,7 @@ $("chatForm").addEventListener("submit", async (e) => {
         let fin = false;
         for (const it of s.items || []) {
           if (it.type === "heard") { heard = it.text; est.remove(); if (heard) yoB = burbuja("yo", "🎤 " + heard); else { burbuja("est", "No te escuché bien. Intenta de nuevo, un poco más cerca."); fin = true; } }
-          else if (it.type === "audio") { /* solo responde por escrito; la voz es solo en la llamada */ }
+          else if (it.type === "audio" && it.wav_b64) { cola.push(it); siguiente(); } // a una nota de voz, responde también con voz
           else if (it.type === "reply") reply = it.text;
           else if (it.type === "done") fin = true;
         }
@@ -1387,6 +1402,7 @@ $("mcpOk").addEventListener("click", async () => {
 $("mcpNo").addEventListener("click", () => { try { sessionStorage.removeItem("pulzia_mcp"); } catch {} history.replaceState(null, "", location.pathname); window.__go?.("home"); });
 onAuthStateChanged(auth, (user) => {
   if (user) {
+    aplicarLlamadas();
     $("hello").textContent = "¡Hola, " + ((user.displayName || "").split(" ")[0] || "bienvenida") + "!";
     if (mcpPend()) showMcp(); else window.__go?.("home");
     revisarPagoAlVolver();
