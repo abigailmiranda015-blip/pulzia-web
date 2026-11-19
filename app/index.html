@@ -218,6 +218,13 @@ h2 { margin: 0; font-size: 22px; }
 .call .lbl { display: block; font-size: 12px; text-align: center; margin-top: 6px; opacity: .85; }
 .btn.call-btn { background: var(--accent); color: #fff; height: 58px; font-size: 17px; }
 .btn.call-btn svg { width: 22px; height: 22px; }
+.btn.demo { background: var(--glow, #e8f6f2); color: var(--accent); border: 2px solid var(--accent); }
+.btn.demo.hd { background: #fff; color: var(--accent); border: 0; margin: 16px auto 0; max-width: 340px; }
+#vidModal { position: fixed; inset: 0; z-index: 9999; background: rgba(0,0,0,.82); display: none; align-items: center; justify-content: center; padding: 12px; }
+#vidModal.on { display: flex; }
+#vidModal .box { position: relative; width: min(94vw, 420px); max-height: 94vh; }
+#vidModal video { width: 100%; max-height: 88vh; border-radius: 16px; background: #000; display: block; }
+#vidModal .x { position: absolute; top: -14px; right: -6px; width: 40px; height: 40px; border-radius: 50%; border: 0; background: #fff; font-size: 22px; font-weight: 700; cursor: pointer; }
 </style>
 </head>
 <body>
@@ -228,6 +235,7 @@ h2 { margin: 0; font-size: 22px; }
     <div class="desk vcw"><video id="wVid" src="videollamada/saludo.mp4" poster="videollamada/poster.jpg" autoplay muted playsinline aria-label="La asistente de Pulzia saludándote"></video></div>
     <h1 class="brand">Pulzia <span>AI</span></h1>
     <p class="tag">Tu asistente personal: se conecta a tu CRM o a tus herramientas de trabajo y te cuenta cómo va tu negocio</p>
+    <button class="btn demo hd" type="button" id="verVideo">▶ Ver cómo funciona (1 min)</button>
   </header>
   <div class="body">
     <ul class="points">
@@ -1514,5 +1522,12 @@ onAuthStateChanged(auth, (user) => {
   } else if (!document.getElementById("home").hidden) window.__go?.("welcome");
 });
 </script>
+<div id="vidModal" role="dialog" aria-modal="true" aria-label="Cómo funciona Pulzia"><div class="box"><button class="x" type="button" id="vidX" aria-label="Cerrar">×</button><video id="vidEl" controls playsinline preload="none" poster="video/como-funciona.jpg"></video></div></div>
+<script>(function(){var m=document.getElementById('vidModal'),v=document.getElementById('vidEl'),b=document.getElementById('verVideo');if(!b)return;
+function open(){v.src='video/como-funciona.mp4';m.classList.add('on');var p=v.play();if(p&&p.catch)p.catch(function(){})}
+function close(){v.pause();v.removeAttribute('src');v.load();m.classList.remove('on')}
+b.addEventListener('click',open);document.getElementById('vidX').addEventListener('click',close);m.addEventListener('click',function(e){if(e.target===m)close()});
+document.addEventListener('keydown',function(e){if(e.key==='Escape')close()});
+try{if(location.hash==='#video')open()}catch(e){}})();</script>
 </body>
 </html>
