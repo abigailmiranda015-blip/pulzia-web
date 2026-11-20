@@ -1,0 +1,15 @@
+{
+  "name": "Pulzia AI",
+  "short_name": "Pulzia",
+  "description": "Tu asistente para clientes y ventas",
+  "start_url": "/app/",
+  "scope": "/app/",
+  "display": "standalone",
+  "background_color": "#f6f8f7",
+  "theme_color": "#0f4f47",
+  "lang": "es",
+  "icons": [
+    {"src": "icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any"},
+    {"src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any"}
+  ]
+}
