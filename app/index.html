@@ -225,6 +225,13 @@ h2 { margin: 0; font-size: 22px; }
 .btn.call-btn svg { width: 22px; height: 22px; }
 .btn.demo { background: var(--glow, #e8f6f2); color: var(--accent); border: 2px solid var(--accent); }
 .btn.demo.hd { background: #fff; color: var(--accent); border: 0; margin: 16px auto 0; max-width: 340px; }
+#instModal { position: fixed; inset: 0; z-index: 9998; background: rgba(0,0,0,.6); display: none; align-items: flex-end; justify-content: center; padding: 12px; }
+#instModal.on { display: flex; }
+#instModal .box { background: var(--card); color: var(--ink); width: min(100%, 440px); border-radius: 20px; padding: 22px 20px 18px; display: flex; flex-direction: column; gap: 12px; }
+#instModal h3 { margin: 0; font-size: 19px; }
+#instModal ol { margin: 0; padding-left: 22px; display: flex; flex-direction: column; gap: 10px; line-height: 1.45; }
+#instModal .k { display: inline-flex; align-items: center; justify-content: center; min-width: 26px; height: 26px; padding: 0 6px; border-radius: 7px; background: var(--bg); border: 1px solid var(--line); font-weight: 700; }
+.btn.inst { background: #fff; color: var(--accent); border: 2px solid var(--accent); }
 #vidModal { position: fixed; inset: 0; z-index: 9999; background: rgba(0,0,0,.82); display: none; align-items: center; justify-content: center; padding: 12px; }
 #vidModal.on { display: flex; }
 #vidModal .box { position: relative; width: min(94vw, 420px); max-height: 94vh; }
@@ -251,6 +258,7 @@ h2 { margin: 0; font-size: 22px; }
     <button class="btn primary" type="button" data-go="signup">Crear cuenta gratis</button>
     <button class="btn ghost" type="button" data-go="login">Ya tengo cuenta</button>
     <p class="free">3 días gratis · sin tarjeta</p>
+    <button class="btn inst" type="button" data-inst hidden>📲 Descargar app</button>
   </div>
 </section>
 
@@ -336,6 +344,7 @@ h2 { margin: 0; font-size: 22px; }
     <button class="btn ghost" type="button" id="chatBtn">Escribirle a tu asistente</button>
     <button class="btn call-btn" type="button" id="callBtn"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M6.6 10.8a15.1 15.1 0 0 0 6.6 6.6l2.2-2.2a1 1 0 0 1 1-.25 11.4 11.4 0 0 0 3.6.57 1 1 0 0 1 1 1V20a1 1 0 0 1-1 1A17 17 0 0 1 3 4a1 1 0 0 1 1-1h3.5a1 1 0 0 1 1 1c0 1.25.2 2.45.57 3.57a1 1 0 0 1-.25 1z"/></svg><span id="callTxt">Llamar a tu asistente</span></button>
     <p class="msg" id="mCall" hidden></p>
+    <button class="btn inst" type="button" data-inst hidden>📲 Descargar app en mi celular</button>
     <button class="link-btn" type="button" id="ajBtn">⚙ Ajustes</button>
     <div class="ajustes wz" id="ajustes" hidden>
       <button class="link-btn" type="button" id="atEdit">Editar botones y nombre</button>
@@ -1527,6 +1536,35 @@ onAuthStateChanged(auth, (user) => {
   } else if (!document.getElementById("home").hidden) window.__go?.("welcome");
 });
 </script>
+<div id="instModal" role="dialog" aria-modal="true" aria-labelledby="instT"><div class="box">
+  <h3 id="instT">Descarga Pulzia en tu celular</h3>
+  <div id="instBody"></div>
+  <button class="btn primary" type="button" id="instOk">Entendido</button>
+</div></div>
+<script>(function(){
+var ua=navigator.userAgent||'',dp=null,m=document.getElementById('instModal'),b=document.getElementById('instBody');
+var ios=/iPhone|iPad|iPod/.test(ua)||(navigator.platform==='MacIntel'&&navigator.maxTouchPoints>1);
+var inApp=/TikTok|musical_ly|Bytedance|Instagram|FBAN|FBAV|Line\//i.test(ua);
+var standalone=(window.matchMedia&&matchMedia('(display-mode: standalone)').matches)||navigator.standalone===true;
+var btns=[].slice.call(document.querySelectorAll('[data-inst]'));
+function show(v){btns.forEach(function(x){x.hidden=!v})}
+if('serviceWorker' in navigator){try{navigator.serviceWorker.register('sw.js').catch(function(){})}catch(e){}}
+if(standalone)return;
+var movil=ios||/Android/i.test(ua);
+show(movil);
+window.addEventListener('beforeinstallprompt',function(e){e.preventDefault();dp=e;show(true)});
+window.addEventListener('appinstalled',function(){dp=null;show(false)});
+function abrir(html){b.innerHTML=html;m.classList.add('on')}
+function cerrar(){m.classList.remove('on')}
+document.getElementById('instOk').addEventListener('click',cerrar);
+m.addEventListener('click',function(e){if(e.target===m)cerrar()});
+btns.forEach(function(x){x.addEventListener('click',function(){
+  if(inApp){abrir('<p style="margin:0">Estás viendo Pulzia dentro de otra app. Para descargarla:</p><ol><li>Toca los <span class="k">⋯</span> de arriba a la derecha.</li><li>Elige <b>«Abrir en el navegador»</b> (Safari o Chrome).</li><li>Ahí toca otra vez <b>📲 Descargar app</b>.</li></ol>');return}
+  if(dp){dp.prompt();dp.userChoice.then(function(){dp=null});return}
+  if(ios){abrir('<ol><li>Toca el botón <b>Compartir</b> <span class="k">⬆︎</span> (abajo en Safari, arriba en Chrome).</li><li>Baja y elige <b>«Agregar a pantalla de inicio»</b> <span class="k">＋</span>.</li><li>Toca <b>Agregar</b>. ¡Listo! Pulzia queda en tu celular con su ícono.</li></ol>');return}
+  abrir('<ol><li>Toca los <span class="k">⋮</span> de arriba a la derecha de Chrome.</li><li>Elige <b>«Instalar app»</b> o <b>«Agregar a pantalla de inicio»</b>.</li><li>Confirma. ¡Listo! Pulzia queda en tu celular con su ícono.</li></ol>');
+})});
+})();</script>
 <div id="vidModal" role="dialog" aria-modal="true" aria-label="Cómo funciona Pulzia"><div class="box"><button class="x" type="button" id="vidX" aria-label="Cerrar">×</button><video id="vidEl" controls playsinline preload="none" poster="video/como-funciona.jpg"></video></div></div>
 <script>(function(){var m=document.getElementById('vidModal'),v=document.getElementById('vidEl'),b=document.getElementById('verVideo');if(!b)return;
 function open(){v.src='video/como-funciona.mp4';m.classList.add('on');var p=v.play();if(p&&p.catch)p.catch(function(){})}
